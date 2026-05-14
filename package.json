@@ -1,0 +1,29 @@
+{
+  "name": "claude-vk",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "bun run --cwd apps/plugin --silent start",
+    "dev": "bun run --cwd apps/plugin --silent dev",
+    "test": "bun test",
+    "typecheck": "bun --bun tsc -b",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,css,less,scss,json,md}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@types/bun": "^1.3.14",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.3"
+  }
+}
