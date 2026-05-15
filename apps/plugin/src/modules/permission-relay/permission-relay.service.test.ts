@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import type { ChannelNotifier } from "@/modules/inbound/notifier";
 import type { SendMessageInput, SendMessageResult } from "@/modules/messaging/messaging.schema";
@@ -8,12 +8,16 @@ import type { MessagingService } from "@/modules/messaging/messaging.service";
 import { PermissionRelayService } from "./permission-relay.service";
 
 class FakeMessaging {
-  sent: SendMessageInput[] = [];
+  sent: { input: SendMessageInput; options?: { keyboard?: string } }[] = [];
   result: SendMessageResult = { ok: true, conversation_message_ids: [1] };
-  async send(input: SendMessageInput): Promise<SendMessageResult> {
-    this.sent.push(input);
+  async send(input: SendMessageInput, options?: { keyboard?: string }): Promise<SendMessageResult> {
+    this.sent.push({ input, options });
     return this.result;
   }
+}
+
+function verdictPayload(request_id: string, behavior: "allow" | "deny"): string {
+  return JSON.stringify({ a: "verdict", r: request_id, b: behavior });
 }
 
 class FakeNotifier {
@@ -43,22 +47,28 @@ function fakeMcp(): { mcp: McpServer; sent: SentNotification[] } {
   return { mcp, sent };
 }
 
-function dm(text: string, from_id = 42, peer_id = 42): InboundMessage {
+function dm(opts: {
+  text?: string;
+  payload?: string;
+  from_id?: number;
+  peer_id?: number;
+}): InboundMessage {
   return {
-    peer_id,
-    from_id,
+    peer_id: opts.peer_id ?? 42,
+    from_id: opts.from_id ?? 42,
     conversation_message_id: 1,
-    text,
+    text: opts.text ?? "",
     attachments: [],
     is_group_chat: false,
     mentioned_bot: false,
     is_reply_to_bot: false,
+    payload: opts.payload,
     received_at: "2026-05-15T00:00:00.000Z",
   };
 }
 
-function groupChat(text: string, from_id = 42): InboundMessage {
-  return { ...dm(text, from_id, 2_000_000_001), is_group_chat: true };
+function groupChat(payload: string, from_id = 42): InboundMessage {
+  return { ...dm({ payload, from_id, peer_id: 2_000_000_001 }), is_group_chat: true };
 }
 
 function build(): {
@@ -86,7 +96,7 @@ describe("PermissionRelayService.handleRequest", () => {
     expect(notifier.warnings[0]).toContain("abcde");
   });
 
-  test("with DM activator, DMs the activator with formatted prompt", async () => {
+  test("with DM activator, DMs the activator with prompt + verdict keyboard", async () => {
     const { service, messaging } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({
@@ -95,10 +105,29 @@ describe("PermissionRelayService.handleRequest", () => {
       description: "ls src/",
     });
     expect(messaging.sent).toHaveLength(1);
-    expect(messaging.sent[0]!.peer_id).toBe(42);
-    expect(messaging.sent[0]!.text).toContain("Bash");
-    expect(messaging.sent[0]!.text).toContain("abcde");
-    expect(messaging.sent[0]!.text).toContain("ls src/");
+    const [call] = messaging.sent;
+    expect(call!.input.peer_id).toBe(42);
+    expect(call!.input.text).toContain("Bash");
+    expect(call!.input.text).toContain("ls src/");
+    expect(call!.input.text).toContain("Tap Allow");
+    expect(call!.options?.keyboard).toBeDefined();
+    const kb = JSON.parse(call!.options!.keyboard!);
+    expect(kb.inline).toBe(true);
+    expect(Array.isArray(kb.buttons)).toBe(true);
+    // First row has Allow + Deny with our verdict payload shape.
+    const [allow, deny] = kb.buttons[0];
+    expect(allow.action.label).toBe("Allow");
+    expect(JSON.parse(allow.action.payload)).toEqual({
+      a: "verdict",
+      r: "abcde",
+      b: "allow",
+    });
+    expect(deny.action.label).toBe("Deny");
+    expect(JSON.parse(deny.action.payload)).toEqual({
+      a: "verdict",
+      r: "abcde",
+      b: "deny",
+    });
   });
 
   test("recordLastDmActivator overwrites prior values", async () => {
@@ -106,46 +135,61 @@ describe("PermissionRelayService.handleRequest", () => {
     service.recordLastDmActivator(1, 1);
     service.recordLastDmActivator(2, 2);
     await service.handleRequest({ request_id: "abcde", tool_name: "X" });
-    expect(messaging.sent[0]!.peer_id).toBe(2);
+    expect(messaging.sent[0]!.input.peer_id).toBe(2);
   });
 });
 
 describe("PermissionRelayService.tryResolveVerdict", () => {
-  test("non-verdict text is not consumed", async () => {
+  test("non-verdict message is not consumed", async () => {
     const { service } = build();
-    expect(await service.tryResolveVerdict(dm("hello"))).toBe(false);
+    expect(await service.tryResolveVerdict(dm({ text: "hello" }))).toBe(false);
   });
 
-  test("verdict in group chat is consumed (no relay) + warns", async () => {
+  test("text-shaped verdict (legacy) is not consumed — payload-only now", async () => {
+    const { service, sent } = build();
+    service.recordLastDmActivator(42, 42);
+    await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
+    expect(await service.tryResolveVerdict(dm({ text: "yes abcde" }))).toBe(false);
+    expect(sent).toHaveLength(0);
+  });
+
+  test("verdict click in group chat is consumed (no relay) + warns", async () => {
     const { service, sent, notifier } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
-    expect(await service.tryResolveVerdict(groupChat("yes abcde"))).toBe(true);
+    expect(await service.tryResolveVerdict(groupChat(verdictPayload("abcde", "allow")))).toBe(true);
     expect(sent).toHaveLength(0);
     expect(notifier.warnings.some((w) => w.includes("group chat"))).toBe(true);
   });
 
-  test("verdict with no matching pending request flows through", async () => {
+  test("verdict click for unknown/expired request is still consumed", async () => {
     const { service, sent } = build();
-    expect(await service.tryResolveVerdict(dm("yes abcde"))).toBe(false);
+    const consumed = await service.tryResolveVerdict(
+      dm({ payload: verdictPayload("zzzzz", "allow") }),
+    );
+    expect(consumed).toBe(true);
     expect(sent).toHaveLength(0);
   });
 
-  test("verdict from wrong user is consumed silently with a warning", async () => {
+  test("verdict click from wrong user is consumed silently with a warning", async () => {
     const { service, sent, notifier } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
-    const consumed = await service.tryResolveVerdict(dm("yes abcde", 999, 999));
+    const consumed = await service.tryResolveVerdict(
+      dm({ payload: verdictPayload("abcde", "allow"), from_id: 999, peer_id: 999 }),
+    );
     expect(consumed).toBe(true);
     expect(sent).toHaveLength(0);
     expect(notifier.warnings.some((w) => w.includes("non-originating"))).toBe(true);
   });
 
-  test("verdict from originating user emits permission notification (allow)", async () => {
+  test("verdict click from originating user emits permission notification (allow)", async () => {
     const { service, sent } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
-    expect(await service.tryResolveVerdict(dm("yes abcde"))).toBe(true);
+    expect(await service.tryResolveVerdict(dm({ payload: verdictPayload("abcde", "allow") }))).toBe(
+      true,
+    );
     expect(sent).toEqual([
       {
         method: "notifications/claude/channel/permission",
@@ -154,11 +198,11 @@ describe("PermissionRelayService.tryResolveVerdict", () => {
     ]);
   });
 
-  test("verdict 'no' maps to deny", async () => {
+  test("deny click maps to deny", async () => {
     const { service, sent } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
-    await service.tryResolveVerdict(dm("no abcde"));
+    await service.tryResolveVerdict(dm({ payload: verdictPayload("abcde", "deny") }));
     expect((sent[0]!.params as { behavior: string }).behavior).toBe("deny");
   });
 
@@ -166,9 +210,11 @@ describe("PermissionRelayService.tryResolveVerdict", () => {
     const { service, sent } = build();
     service.recordLastDmActivator(42, 42);
     await service.handleRequest({ request_id: "abcde", tool_name: "Bash" });
-    await service.tryResolveVerdict(dm("yes abcde"));
-    // Second attempt: pending is gone, so it flows through.
-    expect(await service.tryResolveVerdict(dm("yes abcde"))).toBe(false);
+    await service.tryResolveVerdict(dm({ payload: verdictPayload("abcde", "allow") }));
+    // Second attempt: pending is gone, but the click is still consumed.
+    expect(await service.tryResolveVerdict(dm({ payload: verdictPayload("abcde", "allow") }))).toBe(
+      true,
+    );
     expect(sent).toHaveLength(1);
   });
 });

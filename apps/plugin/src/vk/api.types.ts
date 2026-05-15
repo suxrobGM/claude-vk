@@ -9,6 +9,8 @@ export interface SendMessageParams {
   message: string;
   reply_to?: number;
   random_id: number;
+  /** JSON-stringified VK keyboard object (inline or full). */
+  keyboard?: string;
 }
 
 export interface SendMessageResponse {

@@ -20,11 +20,9 @@ import { nextRandomId } from "./random-id";
 import { RecentSentMessages } from "./recent-sent";
 
 /**
- * Outbound VK messaging operations. Each method returns the structured
- * `{ ok, ... }` envelope the MCP tool layer hands back to Claude — never
- * throws for VK-side failures, which lets Claude reason about retry vs. ask.
- * Unexpected (non-VK) errors propagate so the tool wrapper can log them and
- * surface a generic error envelope.
+ * Outbound VK messaging. Returns the `{ ok, ... }` envelope; VK failures never
+ * throw (Claude reasons about retry vs. ask). Unexpected errors propagate so
+ * the tool wrapper surfaces a generic envelope.
  */
 @singleton()
 export class MessagingService {
@@ -34,13 +32,15 @@ export class MessagingService {
   ) {}
 
   /**
-   * Sends `text` to `peer_id`, auto-chunked at 4096 chars. Returns every
-   * resulting `conversation_message_id` in send order. `reply_to` only attaches
-   * to the first chunk (subsequent chunks read as natural follow-ups in VK's
-   * UI). Partial sends on the wire when a later chunk fails are NOT rolled back.
+   * Sends `text` to `peer_id`, auto-chunked at 4096 chars. `reply_to` and
+   * `options.keyboard` attach to the first chunk only. Partial sends on later
+   * chunk failure are NOT rolled back. `options.keyboard` is internal-only
+   * (not on the MCP shape).
    */
-  async send(input: SendMessageInput): Promise<SendMessageResult> {
-    return runWithEnvelope("send_message", async () => this.sendInternal(input, this.vk));
+  async send(input: SendMessageInput, options?: { keyboard?: string }): Promise<SendMessageResult> {
+    return runWithEnvelope("send_message", async () =>
+      this.sendInternal(input, this.vk, options?.keyboard),
+    );
   }
 
   /** Edits a previously-sent message. VK enforces the 24h / own-messages rules; errors surface via envelope. */
@@ -93,21 +93,25 @@ export class MessagingService {
   private async sendInternal(
     input: SendMessageInput,
     vk: VkApi,
+    keyboard?: string,
   ): Promise<{ ok: true; conversation_message_ids: number[] }> {
     const chunks = chunkText(input.text);
     const cmids: number[] = [];
+
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]!;
       const res = await vk.sendMessage({
         peer_id: input.peer_id,
         message: chunk,
         reply_to: i === 0 ? input.reply_to : undefined,
+        keyboard: i === 0 ? keyboard : undefined,
         random_id: nextRandomId(),
       });
       cmids.push(res.conversation_message_id);
       // Feed the recent-messages ring so reply-to-bot detection works.
       this.recent.push(input.peer_id, res.conversation_message_id);
     }
+
     logger.info(
       { peer_id: input.peer_id, chunks: chunks.length, first_cmid: cmids[0] },
       "send_message ok",

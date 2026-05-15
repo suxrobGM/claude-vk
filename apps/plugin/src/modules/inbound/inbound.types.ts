@@ -21,5 +21,7 @@ export interface InboundMessage {
   mentioned_bot: boolean;
   /** `reply_to` matches a message the bot sent. Used by `reply_only`. */
   is_reply_to_bot: boolean;
+  /** Raw JSON string from a tapped inline-keyboard button. Consumed by the permission relay. */
+  payload?: string;
   received_at: string;
 }

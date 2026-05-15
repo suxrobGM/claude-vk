@@ -14,6 +14,8 @@ export interface VkMessage {
   text?: string;
   attachments?: VkMessageAttachment[];
   reply_message?: { conversation_message_id?: number; id?: number };
+  /** Present when the user tapped an inline-keyboard button. */
+  payload?: string;
 }
 
 export interface VkMessageAttachment {
@@ -30,11 +32,9 @@ interface PhotoSize {
 }
 
 /**
- * Translate a raw VK `message_new` message payload into our normalized
- * `InboundMessage`. Pure — no I/O, no DI. Tolerates partial payloads: missing
- * peer_id / from_id default to 0 so the downstream gate drops the message
- * rather than crashing. `mentioned_bot` / `is_reply_to_bot` are initialized to
- * false and later enriched by `MentionDetector`.
+ * Translate a VK `message_new` payload into our `InboundMessage`. Pure.
+ * Missing peer_id/from_id default to 0 so the gate drops the message.
+ * `mentioned_bot` / `is_reply_to_bot` are filled later by `MentionDetector`.
  */
 export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
   const msg = m ?? {};
@@ -45,6 +45,7 @@ export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
     url: pickAttachmentUrl(a),
   }));
   const peerId = msg.peer_id ?? 0;
+
   return {
     peer_id: peerId,
     from_id: msg.from_id ?? 0,
@@ -55,6 +56,7 @@ export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
     is_group_chat: isGroupChat(peerId),
     mentioned_bot: false,
     is_reply_to_bot: false,
+    payload: msg.payload,
     received_at: new Date().toISOString(),
   };
 }

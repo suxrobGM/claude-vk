@@ -29,9 +29,8 @@ import { RateLimiter } from "./rate-limiter";
 const VK_API_VERSION = "5.199";
 
 /**
- * Singleton VK API client. Lazily constructs vk-io on first call so the
- * process boots without `VK_TOKEN` set — `/healthz` stays reachable and tools
- * surface `vk_token_missing` as a structured envelope. Every method goes
+ * VK API client. vk-io is constructed lazily so the process boots without
+ * `VK_TOKEN`; missing-token surfaces as `vk_token_missing`. Every call goes
  * through `RateLimiter.withRetry`.
  */
 @singleton()
@@ -48,6 +47,7 @@ export class VkClient implements VkApi {
           message: p.message,
           random_id: p.random_id,
           reply_to: p.reply_to,
+          keyboard: p.keyboard,
         })
         .then(toSendResponse),
     );

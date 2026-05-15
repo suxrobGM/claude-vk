@@ -4,8 +4,9 @@ import { logger } from "@/common/logger";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import type { ChannelNotifier } from "@/modules/inbound/notifier";
 import { MessagingService } from "@/modules/messaging/messaging.service";
+import { buildVerdictKeyboard } from "./keyboard";
 import type { PermissionRequestParams } from "./permission-relay.schema";
-import { parseVerdict } from "./verdict";
+import { parsePayloadVerdict } from "./verdict";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -23,16 +24,9 @@ interface DmActivator {
 }
 
 /**
- * MCP `notifications/claude/channel/permission_request` ↔ VK DM bridge.
- *
- * Outbound: Claude Code sends a permission request → we DM the most recent
- * DM-channel originator with the formatted prompt.
- * Inbound: every inbound DM is checked against the pending map; matching
- * verdicts emit `notifications/claude/channel/permission` and short-circuit
- * the normal forwarding pipeline so verdict text never reaches Claude.
- *
- * State is in-memory only — verdicts are time-bound and the user can always
- * retry from the terminal if a restart wipes pending requests.
+ * MCP permission_request ↔ VK DM bridge. Outbound: DM the last activator with
+ * Allow/Deny buttons. Inbound: button payload emits the verdict notification
+ * and short-circuits the forwarding pipeline. State is in-memory.
  */
 @singleton()
 export class PermissionRelayService {
@@ -78,7 +72,8 @@ export class PermissionRelayService {
     }
 
     const text = formatPrompt(params);
-    const result = await this.messaging.send({ peer_id: activator.peer_id, text });
+    const keyboard = buildVerdictKeyboard(params.request_id);
+    const result = await this.messaging.send({ peer_id: activator.peer_id, text }, { keyboard });
     if (!result.ok) {
       logger.warn(
         { peer_id: activator.peer_id, request_id: params.request_id, code: result.code },
@@ -104,17 +99,17 @@ export class PermissionRelayService {
   }
 
   /**
-   * Inbound hook. Returns `true` iff the message was consumed as a verdict —
-   * the caller MUST then short-circuit the inbound pipeline so verdict text
-   * does not reach Claude. PRD §15.1: emit permission notification "instead of
-   * forwarding the text".
+   * Inbound hook. Returns `true` iff the message was a verdict button click —
+   * the caller must short-circuit the pipeline so the bare "Allow"/"Deny"
+   * label doesn't reach Claude (PRD §15.1).
    */
   async tryResolveVerdict(msg: InboundMessage): Promise<boolean> {
-    const verdict = parseVerdict(msg.text);
+    const verdict = parsePayloadVerdict(msg.payload);
     if (!verdict) return false;
 
-    // Group chats: never honour a verdict (too easy to social-engineer) but
-    // still consume the message so the verdict text isn't broadcast to Claude.
+    // Group chats: ignore the verdict (too easy to social-engineer) but still
+    // consume so the label doesn't broadcast to Claude. In practice the
+    // keyboard is only ever sent in DMs, so this is belt-and-suspenders.
     if (msg.is_group_chat) {
       await this.notifier?.warn(
         "permission verdict received in group chat ignored — verdicts must come from DMs",
@@ -124,9 +119,8 @@ export class PermissionRelayService {
 
     const pending = this.pending.get(verdict.request_id);
     if (!pending) {
-      // Not a known request id — could be a stray text matching the regex
-      // shape. Let it flow to Claude as normal content.
-      return false;
+      // Unknown/expired request — still consume the click.
+      return true;
     }
 
     if (msg.from_id !== pending.from_id) {
@@ -174,8 +168,5 @@ export class PermissionRelayService {
 function formatPrompt(params: PermissionRequestParams): string {
   const body = params.description?.trim();
   const detail = body ? `\n   "${body}"` : "";
-  return (
-    `🔒 Claude wants to run ${params.tool_name}:${detail}\n\n` +
-    `Reply "yes ${params.request_id}" or "no ${params.request_id}".`
-  );
+  return `🔒 Claude wants to run ${params.tool_name}:${detail}\n\nTap Allow or Deny below.`;
 }
