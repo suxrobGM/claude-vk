@@ -56,7 +56,7 @@ The marketplace points at this repo. The plugin source lives at the repo root (`
 /vk:configure <your-token>
 ```
 
-Writes `VK_TOKEN=<your-token>` to `~/.claude/channels/vk/.env` (mode `0600`). You can also drop `VK_PORT=6060` or `LOG_LEVEL=info` into the same file later.
+Writes `VK_TOKEN=<your-token>` to `~/.claude/channels/vk/.env` (mode `0600`). You can also drop `PORT=6060` or `LOG_LEVEL=info` into the same file later.
 
 The plugin reads this file at startup. Shell env always wins on conflict: `VK_TOKEN=... claude ...` overrides the file.
 

@@ -120,7 +120,7 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 
 ### 5.1 Why ElysiaJS
 
-ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `VK_PORT`) and serves the local admin + health surface only — there is no inbound HTTP route. Routes:
+ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `PORT`) and serves the local admin + health surface only — there is no inbound HTTP route. Routes:
 
 - `GET /healthz`, `GET /readyz` — for users running the plugin under `tmux`, `systemd`, or similar.
 - `POST /admin/access/*`, `GET /admin/state`, `GET /admin/config` — surfaced to the slash commands so they don't have to edit JSON files directly. Edits go through Elysia handlers that validate and atomically write `access.json`; the `fs.watch` on that file picks up the change in-process.
@@ -129,7 +129,7 @@ Elysia is chosen over Hono / raw `Bun.serve` for end-to-end type inference on ro
 
 ### 5.2 Process model
 
-Single Bun process. Claude Code spawns it under stdio for the MCP transport; the same process binds **`127.0.0.1:6060`** for the Elysia routes (admin + health). The listener is hard-bound to `127.0.0.1` — there's no inbound HTTP, so there's nothing to expose. If port 6060 conflicts, override via `VK_PORT`.
+Single Bun process. Claude Code spawns it under stdio for the MCP transport; the same process binds **`127.0.0.1:6060`** for the Elysia routes (admin + health). The listener is hard-bound to `127.0.0.1` — there's no inbound HTTP, so there's nothing to expose. If port 6060 conflicts, override via `PORT`.
 
 Inbound VK events arrive via `vk-io`'s long-poll loop, which makes outbound HTTPS connections to `api.vk.com` (for `groups.getLongPollServer`) and the VK-supplied poll server (for `a_check`). No firewall rules or proxy required.
 
@@ -577,7 +577,7 @@ All commands hit `http://127.0.0.1:6060/admin/*`, so they work even from within 
 
 Persistent state is **two JSON files**. Both are written atomically (write-to-tmp + rename), serialized through an in-process write chain, and validated against TypeBox schemas on load and update. A malformed write is rejected and the previous in-memory version stays live.
 
-- **`~/.claude/channels/vk/.env`** (`0600`) — `VK_TOKEN`, optional `VK_PORT` / `LOG_LEVEL` / `NODE_ENV`. Read once at startup; shell env overrides.
+- **`~/.claude/channels/vk/.env`** (`0600`) — `VK_TOKEN`, optional `PORT` / `LOG_LEVEL` / `NODE_ENV`. Read once at startup; shell env overrides.
 - **`~/.claude/channels/vk/access.json`** (`0600`) — policies, chats, senders, mention policies, pending pair codes (schema in §11.2). Hot-reloaded via `fs.watch`.
 - **`~/.claude/channels/vk/peers.json`** (`0644`) — resolved VK user/group metadata cache, TTL 1h. Safe to delete; rebuilds on demand.
 - **`~/.claude/channels/vk/inbox/`** (dir) — downloaded attachments, grouped by `<peer_id>/<cmid>/`.

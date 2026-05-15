@@ -6,7 +6,7 @@ import { envPath } from "@/state/paths";
 
 const EnvSchema = t.Object({
   VK_TOKEN: t.Optional(t.String({ minLength: 1 })),
-  VK_PORT: t.Optional(t.String({ default: "6060", pattern: "^[0-9]+$" })),
+  PORT: t.Optional(t.String({ default: "6060", pattern: "^[0-9]+$" })),
 
   LOG_LEVEL: t.Optional(t.String({ default: "info" })),
   NODE_ENV: t.Optional(
@@ -26,7 +26,7 @@ declare global {
 /**
  * Merge `~/.claude/channels/vk/.env` under `process.env` (shell wins),
  * validate the schema, and write declared defaults back so consumers can read
- * `process.env.VK_PORT!` directly. Throws on validation failure.
+ * `process.env.PORT!` directly. Throws on validation failure.
  */
 export function validateEnv(): void {
   const fileEnv = readEnvFile();

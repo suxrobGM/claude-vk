@@ -44,4 +44,11 @@ VK channel
 
 If either liveness probe fails, the plugin isn't running. Remind the user
 to launch with
-`claude --dangerously-load-development-channels plugin:vk@suxrobgm/claude-vk`.
+`claude --dangerously-load-development-channels plugin:vk@claude-vk`.
+
+If `vk_connected` is `false` with `last_error: "VK_TOKEN missing"`, the
+plugin booted without a token — run `/vk:configure <token>` then restart
+the Claude session (the long-poll loop only reads `VK_TOKEN` at startup).
+If the error starts with `vk_api_5` the token is rejected; with `vk_api_15`
+the token is missing the `manage` scope or Long Poll API is disabled in
+the community admin.

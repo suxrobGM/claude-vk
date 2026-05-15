@@ -19,7 +19,7 @@ export class AdminService {
   getConfig(): ConfigResponse {
     const identity = this.community.get();
     return {
-      port: Number(process.env.VK_PORT!),
+      port: Number(process.env.PORT!),
       state_dir: stateDir,
       vk_community_id: identity?.id ?? null,
       vk_community_screen_name: identity?.screen_name ?? null,

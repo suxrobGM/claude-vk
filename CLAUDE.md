@@ -39,7 +39,7 @@ Tool handlers **never throw to MCP** — `VkApiError`/`PluginError` collapse to 
 
 **Config.** [env.ts](apps/plugin/src/env.ts) merges `~/.claude/channels/vk/.env` under `process.env`; [config.ts](apps/plugin/src/config.ts) exposes `current()`. `current()` validates once on first call (writes defaults back to `process.env`) and rebuilds a fresh snapshot from `process.env` on every subsequent call — call at use-time, never capture.
 
-The user only configures **`VK_TOKEN`** and optionally **`VK_PORT`** / **`LOG_LEVEL`**. The HTTP listener is hard-bound to `127.0.0.1` — there is no inbound HTTP surface, so no public-exposure knob. The bound community's `id` and `screen_name` are auto-resolved at startup via `groups.getById` and cached in [`CommunityResolver`](apps/plugin/src/modules/access/community-resolver.ts) — no env override.
+The user only configures **`VK_TOKEN`** and optionally **`PORT`** / **`LOG_LEVEL`**. The HTTP listener is hard-bound to `127.0.0.1` — there is no inbound HTTP surface, so no public-exposure knob. The bound community's `id` and `screen_name` are auto-resolved at startup via `groups.getById` and cached in [`CommunityResolver`](apps/plugin/src/modules/access/community-resolver.ts) — no env override.
 
 **State (JSON, never SQLite).** [state/json-store.ts](apps/plugin/src/state/json-store.ts) is the generic store: atomic tmp+rename writes, in-memory cache, serialized writes, TypeBox validation on load + update. Bad writes are rejected; previous version stays live. Schemas live with the module that owns the file.
 

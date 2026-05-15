@@ -15,8 +15,7 @@ that isn't on this allowlist (unless the policy is `pairing`, in which case
 unknown DMs get a 6-character code that this skill consumes).
 
 Arguments: `$ARGUMENTS` — the first token is the sub-action, the rest are
-sub-action arguments. Group-chat-specific sub-actions (mention-policy) land
-in M4.
+sub-action arguments.
 
 ---
 
@@ -45,8 +44,7 @@ curl -s http://127.0.0.1:6060/admin/access/chats/<peer_id>
 
 ### `policy <peer_type> <policy>`
 
-`peer_type` is `dm` or `group_chat`; `policy` is `pairing`, `allowlist`, or
-(DMs only) `open`.
+`peer_type` is `dm` or `group_chat`; `policy` is `pairing` or `allowlist`.
 
 ```bash
 curl -s -X PUT http://127.0.0.1:6060/admin/access/policies/<peer_type> \
@@ -93,8 +91,16 @@ curl -s http://127.0.0.1:6060/admin/access/pairings
 
 ### `mention-policy <peer_id> <mention_only|all|reply_only>`
 
-Group-chat activation policy. **Not implemented in this milestone** —
-returns a clear "group chats land in M4" message.
+Group-chat activation policy. Controls _when_ the bot activates on allowed
+senders — `mention_only` (default) wakes only on `@<community>` or replies
+to the bot; `reply_only` wakes only on direct replies; `all` forwards every
+allowed-sender message.
+
+```bash
+curl -s -X PUT http://127.0.0.1:6060/admin/access/chats/<peer_id>/mention-policy \
+  -H 'content-type: application/json' \
+  -d '{"policy":"mention_only"}'
+```
 
 ---
 
