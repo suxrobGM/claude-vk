@@ -64,6 +64,7 @@ export class JsonStore<T> {
       await this.atomicWrite(candidate);
       this.cache = candidate;
     });
+
     this.writeChain = next.catch(() => undefined);
     await next;
   }

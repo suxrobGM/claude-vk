@@ -8,6 +8,7 @@ import { validateEnv } from "@/env";
 import { startMcpServer } from "@/mcp/server";
 import { accessController } from "@/modules/access/access.controller";
 import { AccessStore } from "@/modules/access/access.store";
+import { PairingService } from "@/modules/access/pairing";
 import { adminController } from "@/modules/admin/admin.controller";
 import { healthController } from "@/modules/health/health.controller";
 import { startInbound } from "@/modules/inbound/inbound.startup";
@@ -20,6 +21,7 @@ bootstrapContainer();
 // at first call, and the MCP transport accepts requests as soon as it connects.
 await container.resolve(AccessStore).init();
 await container.resolve(UsersCache).init();
+await container.resolve(PairingService).pruneExpired();
 
 const mcp = await startMcpServer();
 startInbound(mcp);

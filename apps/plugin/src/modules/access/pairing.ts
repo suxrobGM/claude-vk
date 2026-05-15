@@ -97,16 +97,38 @@ export class PairingService {
     const file = this.access.get();
     return Object.entries(file.pending_pairs).map(([code, pair]) => ({ code, pair }));
   }
+
+  /** Drops any pending pair codes whose TTL has already elapsed. Run on boot. */
+  async pruneExpired(): Promise<void> {
+    const now = new Date();
+    const before = Object.keys(this.access.get().pending_pairs).length;
+    if (before === 0) {
+      return;
+    }
+    let removed = 0;
+
+    await this.access.update((draft) => {
+      const sizeBefore = Object.keys(draft.pending_pairs).length;
+      sweepExpired(draft.pending_pairs, now);
+      removed = sizeBefore - Object.keys(draft.pending_pairs).length;
+    });
+
+    if (removed > 0) logger.info({ removed }, "pruned expired pairing codes on startup");
+  }
 }
 
 export function generateCode(): string {
   let out = "";
-  for (let i = 0; i < CODE_LENGTH; i++) out += ALPHABET[randomInt(0, ALPHABET.length)];
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    out += ALPHABET[randomInt(0, ALPHABET.length)];
+  }
   return out;
 }
 
 function sweepExpired(pairs: Record<string, PendingPair>, now: Date): void {
   for (const [code, pair] of Object.entries(pairs)) {
-    if (Date.parse(pair.expires_at) <= now.getTime()) delete pairs[code];
+    if (Date.parse(pair.expires_at) <= now.getTime()) {
+      delete pairs[code];
+    }
   }
 }
