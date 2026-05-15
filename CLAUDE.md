@@ -1,97 +1,61 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
-`claude-vk` is a Claude Code **channel plugin** that bridges VK.com (community DMs and group chats) into a Claude session. It is a single Bun process exposing an MCP stdio server _and_ an ElysiaJS HTTP listener on `127.0.0.1:6060`. The MCP surface declares `experimental.claude/channel` and (opt-in) `claude/channel/permission`.
+`claude-vk` is a Claude Code **channel plugin** bridging VK.com (DMs + group chats) into a session. Single Bun process: MCP stdio server + ElysiaJS on `127.0.0.1:6060`. MCP capability: `experimental.claude/channel` (+ opt-in `claude/channel/permission` in M7).
 
-The PRD at [docs/prd.md](docs/prd.md) is the source of truth for design decisions, milestones, and the access-control model. Read §5 (architecture), §7 (repo layout), §9 (inbound flow), and §11 (access) before doing non-trivial work. Current branch is mid-M1 — outbound messaging works; inbound/access/group-chat support land in later milestones.
+PRD: [docs/prd.md](docs/prd.md) — source of truth. M0–M5 shipped; M6 (Callback API), M7 (permission relay), M8 (polish) open.
 
 ## Commands
 
-Run from repo root unless stated otherwise. The repo is a Bun workspaces monorepo with a single workspace under `apps/plugin`.
+- `bun run dev` / `bun run start` — boot (watch / no-watch)
+- `bun run test` — `bun test` across workspaces; `*.test.ts` colocated
+- `bun run typecheck` — `tsc --noEmit`
+- Single file: `bun test apps/plugin/src/vk/rate-limiter.test.ts`
+- Single name: `bun test -t "<pattern>"`
 
-- `bun run dev` — start the plugin with `--watch` (MCP stdio + Elysia on `:6060`).
-- `bun run start` — start without watch.
-- `bun run test` — runs `bun test` across all workspaces. `*.test.ts` files are colocated next to source.
-- `bun run typecheck` — `tsc --noEmit` across all workspaces.
-- Single-file tests: `bun test apps/plugin/src/vk/rate-limiter.test.ts` (or any path).
-- Single-test filter: `bun test -t "<name pattern>"`.
-- `bun install` from root installs all workspace deps.
-
-Pre-commit runs `lint-staged` → `prettier --write` via husky. Don't bypass it.
+Pre-commit: `lint-staged` → `prettier --write` via husky. Don't bypass.
 
 ## Architecture
 
-### Process shape
+**Composition.** [app.ts](apps/plugin/src/app.ts) is the only composition point: `bootstrapContainer()` → `startMcpServer()` (which calls `registerAllTools`) → mount each module's `*.controller.ts` on Elysia → `listen`.
 
-[apps/plugin/src/app.ts](apps/plugin/src/app.ts) is the **only composition point**. In order it:
+**Infrastructure vs modules.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure — never import from `modules/`. Feature modules under `modules/` are flat; one folder per concern, no further nesting. File suffixes: `*.controller.ts` (Elysia), `*.tools.ts` (MCP), `*.service.ts`, `*.schema.ts` (zod for MCP + TypeBox for persistent/HTTP shapes).
 
-1. `bootstrapContainer()` — tsyringe DI root (currently a no-op guard; class services use `@injectable()`/`@singleton()` and resolve by constructor).
-2. `startMcpServer()` — creates the MCP server, calls `registerAllTools(server)`, attaches a `StdioServerTransport`, flips `ready=true`.
-3. Boots Elysia, mounts each module's `*.controller.ts`, binds the listener.
+**Implemented modules:** `health`, `ping`, `messaging`, `access`, `admin`, `inbound`, `history`, `users`. `permission-relay` is `.gitkeep` until M7.
 
-The MCP server's `instructions` string is what Claude reads to learn the tool surface — keep it accurate when adding tools.
+**MCP tools.** Each module has `@injectable() *Tools` with `register(server)`; [mcp/register-tools.ts](apps/plugin/src/mcp/register-tools.ts) resolves and calls each. To add: zod `*InputShape` in `*.schema.ts`, service method returning `{ ok: true, ... } | ToolFailure` wrapped in `runWithEnvelope`, `register(server)` call wrapping with `toCallResult`, container line. Both helpers live in [common/utils/tool-envelope.ts](apps/plugin/src/common/utils/tool-envelope.ts).
 
-### Infrastructure vs feature modules
+Tool handlers **never throw to MCP** — `VkApiError`/`PluginError` collapse to `{ ok: false, code, message }`; anything else becomes `internal_error`. Throwing closes the connection.
 
-`src/` splits into infrastructure folders and feature modules. **Infrastructure never imports from `modules/`.**
+**VK surface (split for clarity).**
 
-- **Infrastructure** — `mcp/` (server lifecycle, tool registration), `state/` (generic `JsonStore<T>`, path resolution), `vk/` (vk-io wrapper + token-bucket rate limiter + text chunking), `common/` (logger, errors, DI container, peer-id helpers).
-- **Feature modules** — flat folders under `modules/`. Each module owns its services, `*.schema.ts` (TypeBox + zod), `*.controller.ts` (Elysia plugin, if any HTTP surface), and `*.tools.ts` (MCP tool registration class, if any MCP surface). See [docs/prd.md §7.1](docs/prd.md) for naming rules.
+- [vk/api.ts](apps/plugin/src/vk/api.ts) — `VkApi` interface (depend on this in tests, not `VkClient`).
+- [vk/api.types.ts](apps/plugin/src/vk/api.types.ts) — every `*Params` / `*Response` interface. No inline shapes.
+- [vk/mappers.ts](apps/plugin/src/vk/mappers.ts) — coerce vk-io's loose responses.
+- [vk/client.ts](apps/plugin/src/vk/client.ts) — `@singleton() VkClient implements VkApi`. Lazy `VK` ctor so `/healthz` works without `VK_TOKEN`. Every method routes through `this.run(fn)` → [`RateLimiter.withRetry`](apps/plugin/src/vk/rate-limiter.ts) (20 req/s token bucket; error 6 retries 5× w/ 250ms × attempt; error 9 fatal). Limiter uses a sleep-loop, not timers — keep it that way so `bun test` exits.
 
-Currently implemented: `modules/health/`, `modules/ping/`, `modules/messaging/`. The other module folders (`access/`, `admin/`, `history/`, `inbound/`, `permission-relay/`, `users/`) are `.gitkeep`-only placeholders for upcoming milestones — don't be surprised when they're empty.
+**Config.** [env.ts](apps/plugin/src/env.ts) merges `~/.claude/channels/vk/.env` under `process.env`; [config.ts](apps/plugin/src/config.ts) exposes `current()`. **Always call `current()` at use-time** — captured refs go stale under hot-reload.
 
-### MCP tool registration
+**State (JSON, never SQLite).** [state/json-store.ts](apps/plugin/src/state/json-store.ts) is the generic store: atomic tmp+rename writes, in-memory cache, serialized writes, TypeBox validation on load + update. Bad writes are rejected; previous version stays live. Schemas live with the module that owns the file.
 
-Tools are registered by their owning module via a `*Tools` class (`@injectable()`), composed in [apps/plugin/src/mcp/register-tools.ts](apps/plugin/src/mcp/register-tools.ts). Add a new tool by:
+**Access + mention.** Three-layer gate in [access/access.gate.ts](apps/plugin/src/modules/access/access.gate.ts): chat allowlist → per-chat senders → mention-policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). Mention signals in [access/mention.ts](apps/plugin/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `state.recent_messages`), `keyboard_payload` (M7). `isPairCommand` requires explicit `@<community> pair` — group chats never auto-emit codes.
 
-1. Define the input shape in `{module}.schema.ts` (zod for MCP input; TypeBox if it also goes through Elysia).
-2. Implement the service method returning `{ ok: true, ... }`.
-3. Add a `register(server)` method on the module's `*Tools` class wrapping the service with `toCallResult` (or equivalent envelope).
-4. Add `container.resolve(YourTools).register(server)` to `register-tools.ts`.
+**Inbound.** [inbound.service.ts](apps/plugin/src/modules/inbound/inbound.service.ts): `normalize → mention enrich → gate → (drop | pair | download + notify)`. Never throws — long-poll continues on per-message failures. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
 
-Tool handlers **never throw** to MCP. All errors collapse into a `{ ok: false, code, message }` envelope — see `runWithEnvelope` in [apps/plugin/src/modules/messaging/messaging.service.ts](apps/plugin/src/modules/messaging/messaging.service.ts) for the pattern. `VkApiError`/`PluginError` surface their `code`; anything else becomes `internal_error`. Throwing across the MCP boundary would close the connection.
-
-### VK client + rate limiter
-
-[apps/plugin/src/vk/client.ts](apps/plugin/src/vk/client.ts) is a `@singleton()` over vk-io. It lazily constructs the `VK` instance on the first call, so the process boots cleanly without `VK_TOKEN` set — `/healthz` and `ping` stay reachable during initial setup. Tools surface `vk_token_missing` as a structured envelope at call time.
-
-Every API method is wrapped through `RateLimiter.withRetry` ([apps/plugin/src/vk/rate-limiter.ts](apps/plugin/src/vk/rate-limiter.ts)) — a token-bucket sized to VK's group quota (20 req/s). Retry policy: error 6 backs off `250ms × attempt` up to 5 attempts; error 9 is fatal; any other `APIError` rethrows as `VkApiError`. The limiter uses a sleep-loop instead of timers so `bun test` always exits cleanly — keep it that way.
-
-For tests, depend on the `ApiContract` interface, not on `VkClient` directly.
-
-### Config + env
-
-[apps/plugin/src/env.ts](apps/plugin/src/env.ts) merges `~/.claude/channels/vk/.env` under `process.env` (shell wins), validates against a TypeBox schema, and writes defaults back to `process.env`. [apps/plugin/src/config.ts](apps/plugin/src/config.ts) wraps this in a `current()` accessor.
-
-**Always call `current()` at use-time** — never capture the returned `Config` at module load. The PRD plans hot-reload on `.env` change, and captured references will go stale.
-
-### State files (JSON, never SQLite)
-
-All persistent state is human-readable JSON under `~/.claude/channels/vk/` (override via `VK_STATE_DIR`). [apps/plugin/src/state/json-store.ts](apps/plugin/src/state/json-store.ts) is the generic store — one instance per file, atomic writes (tmp + rename + `chmod 0600`), in-memory cache, write-serialization via an internal promise chain, TypeBox validation on load and update. Bad writes are rejected and the previous version stays live.
-
-The store holds no domain knowledge — schemas live in the module that owns the data (e.g. `access.schema.ts` will own `access.json`).
-
-### Peer IDs
-
-VK convention: `peer_id ≥ 2_000_000_000` is a group chat; below that is a DM (user ID). Use [apps/plugin/src/common/peer.ts](apps/plugin/src/common/peer.ts) → `isGroupChat()` rather than open-coding the comparison.
-
-### Access gate (designed, not yet implemented)
-
-When implementing M2/M3/M4, gate inbound messages on **`from_id`, not `peer_id`** — the channels reference is explicit about this, and group chats let any member inject prompts otherwise. The two-layer model (chat allowlist + per-chat sender allowlist + group-chat mention policy) is specified in [docs/prd.md §9.4 + §11](docs/prd.md).
+**Peer IDs.** `peer_id ≥ 2_000_000_000` = group chat. Use `isGroupChat()` from [common/utils/peer.ts](apps/plugin/src/common/utils/peer.ts).
 
 ## Conventions
 
-- Path alias `@/*` → `apps/plugin/src/*`. Use it instead of long relative imports.
-- TypeScript is strict + `noUncheckedIndexedAccess`. Array access returns `T | undefined`; assert with `!` only when the bound is obvious one line up.
-- `tsyringe` decorators require `reflect-metadata` (imported once at the top of `common/di/container.ts`). Class services use `@injectable()` or `@singleton()`. Don't register classes manually in `bootstrapContainer` — that function is reserved for non-class value registrations.
-- Logging: `import { logger } from "@/common/logger"`. Pino, pretty in dev, JSON in prod. Don't go through DI for the logger.
-- Errors: extend `PluginError` with a stable `code` string. `VkApiError` synthesizes `vk_api_<n>` codes from VK's numeric `error_code`.
-- Tests are colocated `*.test.ts`. Use `resetContainer()` from `common/di` when a test needs to re-bootstrap.
-- No emojis in code or commit messages unless the user explicitly asks.
+- Path alias `@/*` → `apps/plugin/src/*`.
+- Strict TS + `noUncheckedIndexedAccess`. Assert `!` only when bound is obvious one line up.
+- Object shapes: `export interface`, not `export type X = {...}`. Reserve `type` for unions/intersections.
+- `tsyringe` services use `@injectable()` / `@singleton()`. `bootstrapContainer` is for non-class value registrations only.
+- Logger: `import { logger } from "@/common/logger"` — never via DI.
+- Errors: extend `PluginError` with a stable `code`. `VkApiError` derives `vk_api_<n>` from VK's numeric code.
+- `MessagingService.send` feeds every outbound `cmid` into `StateStore.pushRecentMessage` so reply-to-bot can resolve it.
+- No emojis in code or commits unless asked.
 
 ## Platform notes
 
-Developed on Windows (PowerShell). The codebase intentionally no-ops `chmod` failures on Windows (see `json-store.ts` and `env.ts`) — don't add hard-fails there.
+Developed on Windows (PowerShell). `chmod` failures are no-oped on Windows in `json-store.ts` + `env.ts` — don't hard-fail there.
