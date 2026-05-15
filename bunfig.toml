@@ -1,0 +1,7 @@
+[install]
+# Force a flat node_modules so peer deps (e.g. elysia → @sinclair/typebox)
+# resolve from the marketplace install location. Bun's default `isolated`
+# linker on Windows symlinks straight into ~/.bun/install/cache/, where peer
+# lookup fails — see commit history for the debug log.
+linker = "hoisted"
+exact = true
