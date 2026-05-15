@@ -137,4 +137,4 @@ Every failure looks like:
 }
 ```
 
-`message` includes a human-facing hint when one is available — see [`error-messages.ts`](../apps/plugin/src/common/utils/error-messages.ts) for the full map. Stable `code` values you can branch on: `vk_api_<n>`, `config_invalid`, `access_denied`, `internal_error`.
+`message` includes a human-facing hint when one is available — see [`error-messages.ts`](../server/src/common/utils/error-messages.ts) for the full map. Stable `code` values you can branch on: `vk_api_<n>`, `config_invalid`, `access_denied`, `internal_error`.

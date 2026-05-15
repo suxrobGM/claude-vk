@@ -3,12 +3,11 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "server"
   ],
   "scripts": {
-    "start": "bun run --cwd apps/plugin --silent start",
-    "dev": "bun run --cwd apps/plugin --silent dev",
+    "start": "bun run --cwd server --silent start",
+    "dev": "bun run --cwd server --silent dev",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "prepare": "husky"

@@ -13,8 +13,8 @@
         "typescript": "^6.0.3",
       },
     },
-    "apps/plugin": {
-      "name": "@claude-vk/plugin",
+    "server": {
+      "name": "@claude-vk/server",
       "dependencies": {
         "@elysiajs/swagger": "^1.3.1",
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -51,7 +51,7 @@
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 
-    "@claude-vk/plugin": ["@claude-vk/plugin@workspace:apps/plugin"],
+    "@claude-vk/server": ["@claude-vk/server@workspace:server"],
 
     "@elysiajs/swagger": ["@elysiajs/swagger@1.3.1", "", { "dependencies": { "@scalar/themes": "^0.9.52", "@scalar/types": "^0.0.12", "openapi-types": "^12.1.3", "pathe": "^1.1.2" }, "peerDependencies": { "elysia": ">= 1.3.0" } }, "sha512-LcbLHa0zE6FJKWPWKsIC/f+62wbDv3aXydqcNPVPyqNcaUgwvCajIi+5kHEU6GO3oXUCpzKaMsb3gsjt8sLzFQ=="],
 

@@ -137,28 +137,28 @@ Inbound VK events arrive via `vk-io`'s long-poll loop, which makes outbound HTTP
 
 ## 6. Stack
 
-| Layer         | Choice                                       | Notes                                                                                                                                                        |
-| ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Runtime       | **Bun ≥ 1.2**                                | Same as Telegram plugin prerequisite. Claude Code v2.1.80+ required for channels; v2.1.81+ for permission relay.                                             |
-| HTTP          | **ElysiaJS**                                 | Local admin + health API on `127.0.0.1:6060`. No inbound HTTP surface.                                                                                       |
-| VK client     | **vk-io**                                    | Active, supports community + user tokens. Owns both the REST API surface and the Bots Long Poll loop (`updates.start()`).                                    |
-| MCP           | **`@modelcontextprotocol/sdk`** (TypeScript) | Stdio transport. Channel capability `experimental.claude/channel`.                                                                                           |
-| State         | **JSON files**                               | Atomic writes via tmp + rename; in-process locks; `fs.watch` for hot reload on hand-edits. No SQLite.                                                        |
-| Validation    | **Elysia `t` / TypeBox**                     | One schema source for HTTP, MCP tool input, and JSON file validation on load.                                                                                |
-| Logging       | **Pino**                                     | Pretty in dev, JSON in prod; written to `~/.claude/channels/vk/log/`.                                                                                        |
-| Tests         | **Bun test**                                 | Colocated as `*.test.ts` next to source. MCP tool tests run against a mock vk-io; JSON store tests use a temp dir.                                           |
-| Repo shape    | **Bun workspaces monorepo**                  | `apps/plugin` (the process) + `packages/shared` (reserved for Eden Treaty client when an admin UI ships). Modules pattern inside `apps/plugin/src/modules/`. |
-| Lint / format | **prettier + husky + lint-staged**           | Reused verbatim from `depvault` — `@ianvs/prettier-plugin-sort-imports` + `prettier-plugin-tailwindcss`, root `prettier.config.js`.                          |
+| Layer         | Choice                                       | Notes                                                                                                                                              |
+| ------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime       | **Bun ≥ 1.2**                                | Same as Telegram plugin prerequisite. Claude Code v2.1.80+ required for channels; v2.1.81+ for permission relay.                                   |
+| HTTP          | **ElysiaJS**                                 | Local admin + health API on `127.0.0.1:6060`. No inbound HTTP surface.                                                                             |
+| VK client     | **vk-io**                                    | Active, supports community + user tokens. Owns both the REST API surface and the Bots Long Poll loop (`updates.start()`).                          |
+| MCP           | **`@modelcontextprotocol/sdk`** (TypeScript) | Stdio transport. Channel capability `experimental.claude/channel`.                                                                                 |
+| State         | **JSON files**                               | Atomic writes via tmp + rename; in-process locks; `fs.watch` for hot reload on hand-edits. No SQLite.                                              |
+| Validation    | **Elysia `t` / TypeBox**                     | One schema source for HTTP, MCP tool input, and JSON file validation on load.                                                                      |
+| Logging       | **Pino**                                     | Pretty in dev, JSON in prod; written to `~/.claude/channels/vk/log/`.                                                                              |
+| Tests         | **Bun test**                                 | Colocated as `*.test.ts` next to source. MCP tool tests run against a mock vk-io; JSON store tests use a temp dir.                                 |
+| Repo shape    | **Bun workspaces monorepo**                  | `server` (the process) + `packages/shared` (reserved for Eden Treaty client when an admin UI ships). Modules pattern inside `server/src/modules/`. |
+| Lint / format | **prettier + husky + lint-staged**           | Reused verbatim from `depvault` — `@ianvs/prettier-plugin-sort-imports` + `prettier-plugin-tailwindcss`, root `prettier.config.js`.                |
 
 ---
 
 ## 7. Repository / plugin layout
 
-The repo is a **Bun workspaces monorepo**. The repo root _is_ the plugin root — `.claude-plugin/plugin.json`, `.mcp.json`, `skills/`, and `commands/` sit at the top level so Claude Code's plugin loader finds them where it expects. The actual Bun process lives under `apps/plugin/`, organized in a **modules pattern** (feature-cohesive folders, each owning its services, handlers, MCP tools, HTTP routes, types) — same shape as the user's `depvault`/`ogstack` backends. Tests are **colocated** as `*.test.ts` next to the file they cover. Lint/format is **identical to depvault**: root-level `prettier.config.js` with `@ianvs/prettier-plugin-sort-imports` + `prettier-plugin-tailwindcss`, `husky` + `lint-staged` in the root `package.json`.
+The repo is a **Bun workspaces monorepo**. The repo root _is_ the plugin root — `.claude-plugin/plugin.json`, `.mcp.json`, `skills/`, and `commands/` sit at the top level so Claude Code's plugin loader finds them where it expects. The actual Bun process lives under `server/`, organized in a **modules pattern** (feature-cohesive folders, each owning its services, handlers, MCP tools, HTTP routes, types) — same shape as the user's `depvault`/`ogstack` backends. Tests are **colocated** as `*.test.ts` next to the file they cover. Lint/format is **identical to depvault**: root-level `prettier.config.js` with `@ianvs/prettier-plugin-sort-imports` + `prettier-plugin-tailwindcss`, `husky` + `lint-staged` in the root `package.json`.
 
 `packages/shared` is reserved for the Eden Treaty client surface — re-exporting the Elysia app's types so any future `apps/admin-web` consumes routes end-to-end-typed (matching the depvault pattern). It does **not** hold TypeBox schemas: those live next to the modules that own them, and the admin UI never imports schemas directly — it imports the Eden client. Until `apps/admin-web` exists, `packages/shared` stays empty (or absent — add when needed).
 
-The split inside `apps/plugin/src/` is **infrastructure folders vs feature modules**:
+The split inside `server/src/` is **infrastructure folders vs feature modules**:
 
 - **Infrastructure** (`mcp/`, `state/`, `vk/`, `common/`) — primitives that every feature uses: MCP server lifecycle, JSON store, vk-io client, shared helpers. Infrastructure does not implement features and never imports from `modules/`.
 - **Feature modules** (`modules/health/`, `modules/admin/`, `modules/access/`, `modules/inbound/`, `modules/messaging/`, `modules/history/`, `modules/users/`, `modules/permission-relay/`) — each owns a slice of behavior end-to-end: services, schemas, MCP tool implementations, and (when applicable) an Elysia controller. Modules consume infrastructure.
@@ -168,10 +168,10 @@ The split inside `apps/plugin/src/` is **infrastructure folders vs feature modul
 claude-vk/
 ├── .claude-plugin/
 │   └── plugin.json                       # plugin metadata
-├── .mcp.json                             # ${pluginDir}/apps/plugin/src/app.ts
+├── .mcp.json                             # ${pluginDir}/server/src/app.ts
 ├── README.md
 ├── ACCESS.md
-├── package.json                          # workspaces: ["apps/*", "packages/*"]; husky + lint-staged
+├── package.json                          # workspaces: ["server"]; husky + lint-staged
 ├── tsconfig.json                         # root TS config (bundler, strict, ESNext) — same as depvault
 ├── prettier.config.js                    # reused verbatim from depvault
 ├── bun.lock
@@ -183,111 +183,108 @@ claude-vk/
 │   ├── configure.md                      # /vk:configure
 │   ├── access.md                         # /vk:access
 │   └── status.md                         # /vk:status
-├── apps/
-│   └── plugin/
-│       ├── package.json                  # name: "@claude-vk/plugin"
-│       ├── tsconfig.json                 # extends root; paths: { "@/*": ["./src/*"] }
-│       ├── bunfig.toml
-│       └── src/
-│           ├── app.ts                    # entrypoint: bootstrap → init stores → MCP stdio → startInbound → Elysia listen
-│           ├── env.ts                    # env var schema + dotenv overlay
-│           ├── config.ts                 # current() rebuilds from process.env each call
-│           │
-│           ├── common/                   # cross-cutting primitives
-│           │   ├── di/                   # tsyringe root container + bootstrap
-│           │   ├── logger/               # pino instance
-│           │   ├── errors.ts             # typed plugin errors
-│           │   ├── middleware/           # Elysia error handler
-│           │   ├── plugins/              # Swagger
-│           │   ├── status.ts             # in-process runtime status sink
-│           │   └── utils/                # peer + tool-envelope helpers
-│           │
-│           ├── state/                    # JSON file store primitive — no domain knowledge
-│           │   ├── json-store.ts         # atomic write, TypeBox validation, optional fs.watch reload
-│           │   ├── json-store.test.ts
-│           │   └── paths.ts              # ~/.claude/channels/vk/* path resolution
-│           │
-│           ├── vk/                       # vk-io client primitive — shared by every module that talks to VK
-│           │   ├── api.ts                # VkApi interface (depend on this in tests)
-│           │   ├── api.types.ts          # *Params / *Response interfaces
-│           │   ├── client.ts             # @singleton VkClient implements VkApi
-│           │   ├── mappers.ts            # coerce vk-io loose responses
-│           │   ├── rate-limiter.ts       # token bucket (20 req/s) + retry
-│           │   └── chunk-text.ts         # 4096-char chunker for send_message
-│           │
-│           ├── mcp/                      # MCP server lifecycle + capability declaration
-│           │   ├── server.ts             # creates McpServer, wires stdio transport
-│           │   ├── capabilities.ts       # claude/channel + claude/channel/permission
-│           │   └── register-tools.ts     # resolves each module's *Tools and calls register()
-│           │
-│           ├── types/                    # cross-module schema building blocks
-│           │   └── common.schema.ts
-│           │
-│           └── modules/                  # feature modules (no index.ts barrels)
-│               ├── health/               # /healthz, /readyz
-│               │   ├── health.controller.ts
-│               │   └── health.schema.ts
-│               │
-│               ├── admin/                # cross-cutting /admin/config, /admin/state
-│               │   ├── admin.controller.ts
-│               │   ├── admin.service.ts
-│               │   └── admin.schema.ts
-│               │
-│               ├── access/               # policy, pairing, two-layer gate, mention detection
-│               │   ├── access.controller.ts     # /admin/access/* Elysia plugin
-│               │   ├── access.schema.ts         # TypeBox for access.json + admin route payloads
-│               │   ├── access.service.ts        # CRUD with typed-error throwing
-│               │   ├── access.store.ts          # JsonStore wrapper + fs.watch hot reload
-│               │   ├── access.gate.ts           # chat + sender + mention-policy checks
-│               │   ├── access.gate.test.ts
-│               │   ├── pairing.ts               # 6-char codes, TTL, single-use
-│               │   ├── pairing.test.ts
-│               │   ├── community-resolver.ts    # auto-resolves community id/screen_name via groups.getById
-│               │   ├── mention.ts               # @community / reply-to-bot detection
-│               │   └── mention.test.ts
-│               │
-│               ├── inbound/              # long-poll loop, normalizer, notifier
-│               │   ├── long-poll.service.ts     # vk-io updates.start() + connect-backoff + message_new handler
-│               │   ├── inbound.service.ts       # pipeline: mention enrich → gate → ...
-│               │   ├── inbound.startup.ts       # wires notifier + permission-relay handler + starts long poll
-│               │   ├── inbound.types.ts         # InboundMessage shape
-│               │   ├── message-adapter.ts       # raw VK message → InboundMessage (transport-agnostic)
-│               │   ├── message-adapter.test.ts
-│               │   ├── notifier.ts              # writes <channel> blocks
-│               │   ├── attachments.ts           # download inbound attachments to inbox/<peer_id>/<cmid>/
-│               │   └── attachments.test.ts
-│               │
-│               ├── messaging/            # outbound MCP tools (no HTTP surface)
-│               │   ├── messaging.tools.ts       # register fn called by mcp/register-tools.ts
-│               │   ├── messaging.service.ts     # send/edit/delete/react/mark-read
-│               │   ├── messaging.service.test.ts
-│               │   ├── messaging.schema.ts      # zod input shapes + result types
-│               │   ├── upload-attachment.ts     # photos/docs/voice upload
-│               │   ├── recent-sent.ts           # in-memory ring of (peer_id, cmid) for reply-to-bot
-│               │   └── random-id.ts
-│               │
-│               ├── history/              # read-side MCP tools (the VK-vs-Telegram differentiator)
-│               │   ├── history.tools.ts
-│               │   ├── history.service.ts
-│               │   └── history.schema.ts
-│               │
-│               ├── users/                # peers.json cache + get_user_info tool
-│               │   ├── users.schema.ts          # TypeBox for peers.json + zod for the tool
-│               │   ├── users.tools.ts
-│               │   └── users.cache.ts
-│               │
-│               ├── ping/                 # ping MCP tool (connectivity probe, no token needed)
-│               │   └── ping.tools.ts
-│               │
-│               └── permission-relay/     # claude/channel/permission handling
-│                   ├── permission-relay.service.ts        # request → DM, verdict → MCP notification
-│                   ├── permission-relay.service.test.ts
-│                   ├── permission-relay.startup.ts        # wires MCP notification handler
-│                   ├── permission-relay.schema.ts         # zod for the inbound MCP notification
-│                   ├── verdict.ts                         # parse "yes XXXXX" / "no XXXXX"
-│                   └── verdict.test.ts
-└── packages/
-    └── shared/                           # reserved for Eden Treaty client; empty until apps/admin-web exists
+└── server/
+    ├── package.json                      # name: "@claude-vk/server"
+    ├── tsconfig.json                     # extends root; paths: { "@/*": ["./src/*"] }
+    ├── bunfig.toml
+    └── src/
+        ├── app.ts                        # entrypoint: bootstrap → init stores → MCP stdio → startInbound → Elysia listen
+        ├── env.ts                        # env var schema + dotenv overlay
+        ├── config.ts                     # current() rebuilds from process.env each call
+        │
+        ├── common/                       # cross-cutting primitives
+        │   ├── di/                       # tsyringe root container + bootstrap
+        │   ├── logger/                   # pino instance
+        │   ├── errors.ts                 # typed plugin errors
+        │   ├── middleware/               # Elysia error handler
+        │   ├── plugins/                  # Swagger
+        │   ├── status.ts                 # in-process runtime status sink
+        │   └── utils/                    # peer + tool-envelope helpers
+        │
+        ├── state/                        # JSON file store primitive — no domain knowledge
+        │   ├── json-store.ts             # atomic write, TypeBox validation, optional fs.watch reload
+        │   ├── json-store.test.ts
+        │   └── paths.ts                  # ~/.claude/channels/vk/* path resolution
+        │
+        ├── vk/                           # vk-io client primitive — shared by every module that talks to VK
+        │   ├── api.ts                    # VkApi interface (depend on this in tests)
+        │   ├── api.types.ts              # *Params / *Response interfaces
+        │   ├── client.ts                 # @singleton VkClient implements VkApi
+        │   ├── mappers.ts                # coerce vk-io loose responses
+        │   ├── rate-limiter.ts           # token bucket (20 req/s) + retry
+        │   └── chunk-text.ts             # 4096-char chunker for send_message
+        │
+        ├── mcp/                          # MCP server lifecycle + capability declaration
+        │   ├── server.ts                 # creates McpServer, wires stdio transport
+        │   ├── capabilities.ts           # claude/channel + claude/channel/permission
+        │   └── register-tools.ts         # resolves each module's *Tools and calls register()
+        │
+        ├── types/                        # cross-module schema building blocks
+        │   └── common.schema.ts
+        │
+        └── modules/                      # feature modules (no index.ts barrels)
+            ├── health/                   # /healthz, /readyz
+            │   ├── health.controller.ts
+            │   └── health.schema.ts
+            │
+            ├── admin/                    # cross-cutting /admin/config, /admin/state
+            │   ├── admin.controller.ts
+            │   ├── admin.service.ts
+            │   └── admin.schema.ts
+            │
+            ├── access/                   # policy, pairing, two-layer gate, mention detection
+            │   ├── access.controller.ts         # /admin/access/* Elysia plugin
+            │   ├── access.schema.ts             # TypeBox for access.json + admin route payloads
+            │   ├── access.service.ts            # CRUD with typed-error throwing
+            │   ├── access.store.ts              # JsonStore wrapper + fs.watch hot reload
+            │   ├── access.gate.ts               # chat + sender + mention-policy checks
+            │   ├── access.gate.test.ts
+            │   ├── pairing.ts                   # 6-char codes, TTL, single-use
+            │   ├── pairing.test.ts
+            │   ├── community-resolver.ts        # auto-resolves community id/screen_name via groups.getById
+            │   ├── mention.ts                   # @community / reply-to-bot detection
+            │   └── mention.test.ts
+            │
+            ├── inbound/                  # long-poll loop, normalizer, notifier
+            │   ├── long-poll.service.ts         # vk-io updates.start() + connect-backoff + message_new handler
+            │   ├── inbound.service.ts           # pipeline: mention enrich → gate → ...
+            │   ├── inbound.startup.ts           # wires notifier + permission-relay handler + starts long poll
+            │   ├── inbound.types.ts             # InboundMessage shape
+            │   ├── message-adapter.ts           # raw VK message → InboundMessage (transport-agnostic)
+            │   ├── message-adapter.test.ts
+            │   ├── notifier.ts                  # writes <channel> blocks
+            │   ├── attachments.ts               # download inbound attachments to inbox/<peer_id>/<cmid>/
+            │   └── attachments.test.ts
+            │
+            ├── messaging/                # outbound MCP tools (no HTTP surface)
+            │   ├── messaging.tools.ts           # register fn called by mcp/register-tools.ts
+            │   ├── messaging.service.ts         # send/edit/delete/react/mark-read
+            │   ├── messaging.service.test.ts
+            │   ├── messaging.schema.ts          # zod input shapes + result types
+            │   ├── upload-attachment.ts         # photos/docs/voice upload
+            │   ├── recent-sent.ts               # in-memory ring of (peer_id, cmid) for reply-to-bot
+            │   └── random-id.ts
+            │
+            ├── history/                  # read-side MCP tools (the VK-vs-Telegram differentiator)
+            │   ├── history.tools.ts
+            │   ├── history.service.ts
+            │   └── history.schema.ts
+            │
+            ├── users/                    # peers.json cache + get_user_info tool
+            │   ├── users.schema.ts              # TypeBox for peers.json + zod for the tool
+            │   ├── users.tools.ts
+            │   └── users.cache.ts
+            │
+            ├── ping/                     # ping MCP tool (connectivity probe, no token needed)
+            │   └── ping.tools.ts
+            │
+            └── permission-relay/         # claude/channel/permission handling
+                ├── permission-relay.service.ts        # request → DM, verdict → MCP notification
+                ├── permission-relay.service.test.ts
+                ├── permission-relay.startup.ts        # wires MCP notification handler
+                ├── permission-relay.schema.ts         # zod for the inbound MCP notification
+                ├── verdict.ts                         # parse "yes XXXXX" / "no XXXXX"
+                └── verdict.test.ts
 ```
 
 ### 7.1 Module conventions
@@ -327,7 +324,7 @@ Root `package.json` then defines:
 ```json
 {
   "scripts": {
-    "start": "bun run apps/plugin/src/app.ts"
+    "start": "bun run --cwd server --silent start"
   }
 }
 ```
