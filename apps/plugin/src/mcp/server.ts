@@ -20,8 +20,8 @@ const INSTRUCTIONS = [
   "Tools: `send_message`, `edit_message`, `delete_message` (own messages,",
   "24h window), `react` (sendReaction by reaction_id), `mark_read`,",
   "`upload_attachment` (returns a `vk_ref` you splice into a follow-up send),",
-  "`get_conversation_history` and `search_messages` (the VK-vs-Telegram",
-  "differentiator — Telegram can't do these), `get_user_info` (cached),",
+  "`get_conversation_history` and `search_messages`",
+  "`get_user_info` (cached),",
   "`ping` (connectivity probe, no token needed).",
 ].join(" ");
 

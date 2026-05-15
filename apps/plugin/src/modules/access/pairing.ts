@@ -10,8 +10,12 @@ const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // 32 chars, no 0/O/1/I/L
 const CODE_LENGTH = 6;
 const TTL_MS = 10 * 60 * 1000;
 
-function pairingMessage(code: string): string {
-  return `Hi! To connect this chat to Claude Code, run /vk:access pair ${code} in your Claude session (expires in 10 minutes).`;
+function pairingMessage(code: string, kind: ChatKind): string {
+  const base = `Hi! I'm a Claude Code assistant. To connect this chat, the operator runs:\n\n    /vk:access pair ${code}\n\n…in their Claude session. The code expires in 10 minutes.`;
+  if (kind === "group_chat") {
+    return `${base}\n\nThis is a group chat: mention me with \`@<community> <message>\` or reply to one of my messages to talk to me afterwards.`;
+  }
+  return base;
 }
 
 export type ConsumeResult =
@@ -48,7 +52,7 @@ export class PairingService {
       };
     });
 
-    const text = pairingMessage(code);
+    const text = pairingMessage(code, kind);
     const result = await this.messaging.send({ peer_id: msg.peer_id, text });
     if (!result.ok) {
       logger.warn(
@@ -73,9 +77,12 @@ export class PairingService {
         return;
       }
 
+      // Group-chat pairing leaves `senders` empty — the gate treats that as
+      // "anyone in this chat may message Claude". DMs always have a single
+      // sender (peer_id === from_id), so we seed it for clarity.
       const entry: ChatEntry = {
         kind: pending.kind,
-        senders: [pending.from_id],
+        senders: pending.kind === "group_chat" ? [] : [pending.from_id],
         added_at: now.toISOString(),
         added_by: "pairing",
       };

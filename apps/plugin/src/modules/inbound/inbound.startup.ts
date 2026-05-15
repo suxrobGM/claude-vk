@@ -8,11 +8,8 @@ import { LongPollService } from "./long-poll.service";
 import { ChannelNotifier } from "./notifier";
 
 /**
- * Wires the channel notifier with the live MCP handle, kicks off the
- * community-identity prefetch, and starts the VK Long Poll loop. The loop
- * dispatches `message_new` events into `InboundService.handle` directly —
- * there is no HTTP edge for inbound. Stores are loaded earlier in `app.ts`
- * so they're ready when MCP tools run.
+ * Wires the live MCP notifier into inbound + permission-relay + long-poll,
+ * prefetches the community identity, then starts the long-poll loop.
  */
 export function startInbound(mcp: McpServer): void {
   container.resolve(CommunityResolver).prefetch();
@@ -22,8 +19,11 @@ export function startInbound(mcp: McpServer): void {
   service.setNotifier(notifier);
   startPermissionRelay(mcp, notifier);
 
+  const longPoll = container.resolve(LongPollService);
+  longPoll.setNotifier(notifier);
+
   // Fire-and-forget — the service owns its own connect-backoff loop.
-  void container.resolve(LongPollService).start();
+  void longPoll.start();
 
   logger.info("inbound ready; long-poll starting");
 }

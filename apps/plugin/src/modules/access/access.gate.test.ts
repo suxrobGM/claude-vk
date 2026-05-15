@@ -35,11 +35,20 @@ describe("AccessGate.check", () => {
     expect(gate.check(makeMsg()).kind).toBe("need_pair");
   });
 
-  it("drops unknown peer under allowlist policy", () => {
+  it("denies unknown DM peer under allowlist policy with a reply", () => {
     const gate = new AccessGate(
       makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "allowlist", group_chat: "pairing" } }),
     );
     const r = gate.check(makeMsg());
+    expect(r.kind).toBe("deny_with_reply");
+    if (r.kind === "deny_with_reply") expect(r.reason).toBe("chat-not-allowed");
+  });
+
+  it("silently drops unknown group-chat peer under allowlist policy", () => {
+    const gate = new AccessGate(
+      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "pairing", group_chat: "allowlist" } }),
+    );
+    const r = gate.check(makeMsg({ peer_id: GROUP_PEER, is_group_chat: true }));
     expect(r.kind).toBe("drop");
     if (r.kind === "drop") expect(r.reason).toBe("chat-not-allowed");
   });
@@ -62,7 +71,7 @@ describe("AccessGate.check", () => {
     expect(gate.check(makeMsg()).kind).toBe("allow");
   });
 
-  it("drops unlisted sender under allowlist policy even if chat is listed", () => {
+  it("denies unlisted DM sender under allowlist policy with a reply", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
@@ -78,6 +87,27 @@ describe("AccessGate.check", () => {
       }),
     );
     const r = gate.check(makeMsg());
+    expect(r.kind).toBe("deny_with_reply");
+    if (r.kind === "deny_with_reply") expect(r.reason).toBe("sender-not-allowed");
+  });
+
+  it("silently drops unlisted group-chat sender under allowlist policy", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [200],
+            mention_policy: "all",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    const r = gate.check(makeMsg({ peer_id: GROUP_PEER, from_id: 100, is_group_chat: true }));
     expect(r.kind).toBe("drop");
     if (r.kind === "drop") expect(r.reason).toBe("sender-not-allowed");
   });
@@ -221,6 +251,50 @@ describe("AccessGate.check", () => {
     expect(
       gate.check(makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true })).kind,
     ).toBe("allow");
+  });
+
+  it("allows any sender when group-chat senders[] is empty (post-pair default)", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "pairing" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [], // pairing leaves this empty for group chats
+            mention_policy: "all",
+            added_at: new Date().toISOString(),
+            added_by: "pairing",
+          },
+        },
+      }),
+    );
+    expect(
+      gate.check(makeMsg({ peer_id: GROUP_PEER, from_id: 999, is_group_chat: true })).kind,
+    ).toBe("allow");
+  });
+
+  it("still applies mention_policy when senders[] is empty", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "pairing" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [],
+            mention_policy: "mention_only",
+            added_at: new Date().toISOString(),
+            added_by: "pairing",
+          },
+        },
+      }),
+    );
+    const r = gate.check(
+      makeMsg({ peer_id: GROUP_PEER, from_id: 999, is_group_chat: true, mentioned_bot: false }),
+    );
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("no-mention");
   });
 
   it("defaults to mention_only when chat has no mention_policy set", () => {

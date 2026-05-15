@@ -131,12 +131,12 @@ describe("MessagingService.send", () => {
     });
     const svc = makeService(vk);
     const result = await svc.send({ peer_id: 42, text: "hi" });
-    expect(result).toEqual({
-      ok: false,
-      code: "vk_api_9",
-      message: "flood control",
-      vk_error_code: 9,
-    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("vk_api_9");
+    expect(result.vk_error_code).toBe(9);
+    expect(result.message).toStartWith("flood control");
+    expect(result.message).toContain("flood-control");
   });
 
   it("returns plugin-error envelope on PluginError (e.g. token missing)", async () => {

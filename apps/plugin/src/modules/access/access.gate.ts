@@ -5,13 +5,15 @@ import { AccessStore } from "./access.store";
 export type GateResult =
   | { kind: "allow" }
   | { kind: "need_pair" }
+  | { kind: "deny_with_reply"; reason: string }
   | { kind: "drop"; reason: string };
 
 /**
- * PRD §9.4 three-layer gate: chat allowlist → per-chat sender allowlist →
- * mention-policy activation (group chats only). Mention-policy is a *quiet*
- * filter — applied after sender check, so a non-mention from a known sender
- * is a silent drop, not a `need_pair`.
+ * PRD §9.4 gate: chat allowlist → sender allowlist → mention activation
+ * (group chats only). An empty `senders[]` means "no per-sender restriction"
+ * — anyone in this chat passes the sender layer. Under `allowlist`, DM
+ * denials surface as `deny_with_reply` (one reply per sender); group-chat
+ * denials stay silent.
  */
 @singleton()
 export class AccessGate {
@@ -23,15 +25,17 @@ export class AccessGate {
 
     const chat = file.chats[String(msg.peer_id)];
     if (!chat) {
-      return policy === "pairing"
-        ? { kind: "need_pair" }
-        : { kind: "drop", reason: "chat-not-allowed" };
+      if (policy === "pairing") return { kind: "need_pair" };
+      return msg.is_group_chat
+        ? { kind: "drop", reason: "chat-not-allowed" }
+        : { kind: "deny_with_reply", reason: "chat-not-allowed" };
     }
 
-    if (!chat.senders.includes(msg.from_id)) {
-      return policy === "pairing"
-        ? { kind: "need_pair" }
-        : { kind: "drop", reason: "sender-not-allowed" };
+    if (chat.senders.length > 0 && !chat.senders.includes(msg.from_id)) {
+      if (policy === "pairing") return { kind: "need_pair" };
+      return msg.is_group_chat
+        ? { kind: "drop", reason: "sender-not-allowed" }
+        : { kind: "deny_with_reply", reason: "sender-not-allowed" };
     }
 
     if (msg.is_group_chat) {

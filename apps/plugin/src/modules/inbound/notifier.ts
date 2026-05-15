@@ -15,6 +15,7 @@ export class ChannelNotifier {
     const localPaths = msg.attachments
       .map((a) => a.local_path)
       .filter((p): p is string => Boolean(p));
+
     const trailer =
       localPaths.length > 0
         ? `\n\n[attachments saved to inbox: ${localPaths.join(", ")}]`
@@ -31,7 +32,10 @@ export class ChannelNotifier {
       mentioned: String(msg.mentioned_bot),
       reply_to_bot: String(msg.is_reply_to_bot),
     };
-    if (msg.reply_to !== undefined) meta.reply_to = String(msg.reply_to);
+
+    if (msg.reply_to != null) {
+      meta.reply_to = String(msg.reply_to);
+    }
 
     try {
       await this.mcp.server.notification({
