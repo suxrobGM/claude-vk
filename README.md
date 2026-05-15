@@ -110,7 +110,7 @@ bun run dev
 Load the local checkout via [.mcp.json](.mcp.json), no marketplace needed. From inside the cloned repo:
 
 ```bash
-claude --dangerously-load-development-channels server:vk
+claude --dangerously-load-development-channels server:vk --plugin-dir ./
 ```
 
 Restart the session after editing `apps/plugin/src/`. `access.json` and `.env` hot-reload.

@@ -1,5 +1,5 @@
 ---
-name: vk-status
+name: status
 description: Show VK channel status — transport, connection health, community handle, policies, chat count. Use when the user asks "is VK connected?", "what's the status of VK?", or wants a health summary.
 user-invocable: true
 allowed-tools:

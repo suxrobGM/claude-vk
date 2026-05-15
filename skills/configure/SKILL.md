@@ -1,5 +1,5 @@
 ---
-name: vk-configure
+name: configure
 description: Set up the VK channel — save the community token and community ID. Use when the user pastes a VK community token, asks to configure VK, asks "how do I set this up", or wants to check channel status.
 user-invocable: true
 allowed-tools:

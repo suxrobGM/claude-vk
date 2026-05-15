@@ -29,8 +29,7 @@ const app = new Elysia()
   .use(swaggerPlugin)
   .use(healthController)
   .use(adminController)
-  .use(accessController);
+  .use(accessController)
+  .listen(parseInt(process.env.PORT!));
 
-app.listen({ port: Number(process.env.VK_PORT!), hostname: "127.0.0.1" }, ({ hostname, port }) => {
-  logger.info({ hostname, port }, "elysia listening");
-});
+logger.info(`Plugin server running at http://${app.server?.hostname}:${app.server?.port}`);

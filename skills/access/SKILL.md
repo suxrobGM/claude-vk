@@ -1,5 +1,5 @@
 ---
-name: vk-access
+name: access
 description: Manage VK channel access — pair new chats, edit allowlists, set policy. Use when the user wants to pair, approve a sender, list allowed chats, or change policy for the VK channel.
 user-invocable: true
 allowed-tools:
