@@ -47,7 +47,7 @@ Tools:
  */
 export async function startMcpServer(): Promise<McpServer> {
   const server = new McpServer(
-    { name: "vk", version: "0.1.0" },
+    { name: "vk", version: "1.0.0" },
     { capabilities: buildCapabilities(), instructions: INSTRUCTIONS },
   );
 
