@@ -20,7 +20,7 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
 3. **Install the plugin** from this marketplace:
 
    ```text
-   /plugin marketplace add https://github.com/suxrobGM/claude-vk
+   /plugin marketplace add https://github.com/suxrobgm/claude-vk
    /plugin install vk@claude-vk
    /reload-plugins
    ```

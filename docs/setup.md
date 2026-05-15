@@ -44,8 +44,9 @@ For group chats, you generally want VK to deliver only mentions and replies-to-b
 In any Claude Code session:
 
 ```text
-/plugin marketplace add github:suxrobgm/claude-vk
+/plugin marketplace add https://github.com/suxrobgm/claude-vk
 /plugin install vk@claude-vk
+/reload-plugins
 ```
 
 The marketplace points at this repo. The plugin source lives at the repo root (`source: "."` in `.claude-plugin/marketplace.json`).
