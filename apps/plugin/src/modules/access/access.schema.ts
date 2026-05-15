@@ -93,6 +93,10 @@ export const SetPolicyBodySchema = t.Object({
   policy: t.Union([DmPolicySchema, GroupChatPolicySchema]),
 });
 
+export const SetMentionPolicyBodySchema = t.Object({
+  policy: MentionPolicySchema,
+});
+
 export const ConsumePairingBodySchema = t.Object({
   code: t.String({ minLength: 6, maxLength: 6 }),
 });
@@ -142,6 +146,14 @@ export const SetPolicyResponseSchema = t.Composite([
   t.Object({
     peer_type: t.Union([t.Literal("dm"), t.Literal("group_chat")]),
     policy: t.Union([DmPolicySchema, GroupChatPolicySchema]),
+  }),
+]);
+
+export const SetMentionPolicyResponseSchema = t.Composite([
+  OkResponseSchema,
+  t.Object({
+    peer_id: t.Integer(),
+    policy: MentionPolicySchema,
   }),
 ]);
 

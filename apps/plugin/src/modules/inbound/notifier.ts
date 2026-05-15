@@ -29,6 +29,7 @@ export class ChannelNotifier {
       is_group_chat: String(msg.is_group_chat),
       conversation_message_id: String(msg.conversation_message_id),
       mentioned: String(msg.mentioned_bot),
+      reply_to_bot: String(msg.is_reply_to_bot),
     };
     if (msg.reply_to !== undefined) meta.reply_to = String(msg.reply_to);
 

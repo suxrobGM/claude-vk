@@ -15,6 +15,8 @@ import {
   RemoveChatResponseSchema,
   RemoveResponseSchema,
   SendersListResponseSchema,
+  SetMentionPolicyBodySchema,
+  SetMentionPolicyResponseSchema,
   SetPolicyBodySchema,
   SetPolicyResponseSchema,
 } from "./access.schema";
@@ -69,6 +71,18 @@ export const accessController = new Elysia({
       return { ok: true as const };
     },
     { params: PeerIdSenderParamSchema, response: RemoveResponseSchema },
+  )
+  .put(
+    "/chats/:peer_id/mention-policy",
+    async ({ params, body }) => {
+      const updated = await access.setMentionPolicy(params.peer_id, body.policy);
+      return { ok: true as const, ...updated };
+    },
+    {
+      params: PeerIdParamSchema,
+      body: SetMentionPolicyBodySchema,
+      response: SetMentionPolicyResponseSchema,
+    },
   )
   .get("/policies", () => access.getPolicies(), {
     response: PoliciesResponseSchema,

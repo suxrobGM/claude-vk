@@ -1,18 +1,24 @@
 import { singleton } from "tsyringe";
 import { BadRequestError, NotFoundError } from "@/common/errors";
 import { UsersCache } from "@/modules/users/users.cache";
-import type { ChatKind, DmPolicy, GroupChatPolicy, PendingPair } from "./access.schema";
+import type {
+  ChatKind,
+  DmPolicy,
+  GroupChatPolicy,
+  MentionPolicy,
+  PendingPair,
+} from "./access.schema";
 import { AccessStore } from "./access.store";
 import { PairingService } from "./pairing";
 
-export type ChatSummary = {
+export interface ChatSummary {
   peer_id: number;
   kind: ChatKind;
   title: string | null;
   sender_count: number;
   added_at: string;
   added_by: "pairing" | "manual";
-};
+}
 
 /**
  * Application-level access operations consumed by the HTTP controller and
@@ -117,6 +123,25 @@ export class AccessService {
       else draft.policies.group_chat = policy as GroupChatPolicy;
     });
     return { peer_type: peerType, policy };
+  }
+
+  /**
+   * Set the mention activation policy for a group chat. Throws
+   * {@link NotFoundError} if the chat is unknown, {@link BadRequestError}
+   * if the chat is a DM (mention policy is group-only).
+   */
+  async setMentionPolicy(peerId: string, policy: MentionPolicy) {
+    const chat = this.store.get().chats[peerId];
+    if (!chat) {
+      throw new NotFoundError("chat-not-allowed");
+    }
+    if (chat.kind !== "group_chat") {
+      throw new BadRequestError("mention-policy-group-only");
+    }
+    await this.store.update((draft) => {
+      draft.chats[peerId]!.mention_policy = policy;
+    });
+    return { peer_id: Number(peerId), policy };
   }
 
   /**

@@ -7,7 +7,16 @@ import { STATE_FILE_DEFAULTS, StateFileSchema, type StateFile } from "./state.sc
 const RECENT_MESSAGES_LIMIT = 200;
 const RECENT_EVENT_IDS_LIMIT = 10_000;
 
-export type LongpollCursor = { server: string; key: string; ts: string };
+export interface LongpollCursor {
+  server: string;
+  key: string;
+  ts: string;
+}
+
+export interface RecentMessage {
+  peer_id: number;
+  conversation_message_id: number;
+}
 
 /**
  * Typed accessor over `state.json`. Wraps `JsonStore<StateFile>` so callers
@@ -48,13 +57,15 @@ export class StateStore {
     await this.getStore().update((draft) => {
       const list = draft.recent_messages ?? [];
       list.push({ peer_id, conversation_message_id, sent_at: new Date().toISOString() });
-      while (list.length > RECENT_MESSAGES_LIMIT) list.shift();
+      while (list.length > RECENT_MESSAGES_LIMIT) {
+        list.shift();
+      }
       draft.recent_messages = list;
     });
   }
 
   /** Recent sent-messages ring. */
-  getRecentMessages(): readonly { peer_id: number; conversation_message_id: number }[] {
+  getRecentMessages(): readonly RecentMessage[] {
     return this.getStore().get().recent_messages ?? [];
   }
 

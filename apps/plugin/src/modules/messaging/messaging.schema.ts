@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ToolFailure } from "@/common/utils/tool-envelope";
 
 /**
  * MCP tool input schemas. The MCP SDK's `registerTool` consumes a
@@ -32,23 +33,45 @@ export const DeleteMessageInputShape = {
   delete_for_all: z.boolean().optional().default(false),
 } as const;
 
+export const ReactInputShape = {
+  peer_id: z.number().int(),
+  conversation_message_id: z.number().int(),
+  reaction_id: z
+    .number()
+    .int()
+    .min(1)
+    .describe("VK reaction id (positive integer from VK's enumerated set)."),
+} as const;
+
+export const MarkReadInputShape = {
+  peer_id: z.number().int(),
+  start_message_id: z
+    .number()
+    .int()
+    .optional()
+    .describe("Mark as read up to this message_id; omit to mark all unread."),
+} as const;
+
+export const UploadAttachmentInputShape = {
+  peer_id: z.number().int(),
+  path: z.string().min(1).describe("Absolute path to a local file (≤ 50 MB)."),
+  kind: z
+    .enum(["auto", "photo", "doc", "voice"])
+    .optional()
+    .default("auto")
+    .describe("Override extension-based detection."),
+} as const;
+
 export type SendMessageInput = z.infer<z.ZodObject<typeof SendMessageInputShape>>;
 export type EditMessageInput = z.infer<z.ZodObject<typeof EditMessageInputShape>>;
 export type DeleteMessageInput = z.infer<z.ZodObject<typeof DeleteMessageInputShape>>;
-
-/**
- * Tool result envelope. Same `{ ok, ... }` discriminated union for every
- * messaging tool, written as TypeScript types (not zod) because the service
- * constructs these — they are never parsed back from untrusted input.
- */
-export type ToolFailure = {
-  ok: false;
-  code: string;
-  message: string;
-  vk_error_code?: number;
-};
+export type ReactInput = z.infer<z.ZodObject<typeof ReactInputShape>>;
+export type MarkReadInput = z.infer<z.ZodObject<typeof MarkReadInputShape>>;
+export type UploadAttachmentInput = z.infer<z.ZodObject<typeof UploadAttachmentInputShape>>;
 
 export type SendMessageResult = { ok: true; conversation_message_ids: number[] } | ToolFailure;
-
 export type EditMessageResult = { ok: true } | ToolFailure;
 export type DeleteMessageResult = { ok: true } | ToolFailure;
+export type ReactResult = { ok: true } | ToolFailure;
+export type MarkReadResult = { ok: true } | ToolFailure;
+export type UploadAttachmentResult = { ok: true; vk_ref: string } | ToolFailure;

@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { injectable } from "tsyringe";
+import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { current as currentConfig } from "@/config";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
@@ -28,7 +28,7 @@ export type ConsumeResult =
  * doesn't invalidate an in-flight pairing; expired entries are swept on
  * every consume() so the file doesn't grow unbounded.
  */
-@injectable()
+@singleton()
 export class PairingService {
   constructor(
     private readonly access: AccessStore,

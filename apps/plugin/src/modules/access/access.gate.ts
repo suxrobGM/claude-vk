@@ -1,4 +1,4 @@
-import { injectable } from "tsyringe";
+import { singleton } from "tsyringe";
 import type { InboundMessage } from "@/modules/inbound";
 import { AccessStore } from "./access.store";
 
@@ -8,17 +8,12 @@ export type GateResult =
   | { kind: "drop"; reason: string };
 
 /**
- * Two-layer gate from PRD §9.4: chat allowlist + per-chat sender allowlist,
- * with a third `mention_policy` layer reserved for M4. DM-only in this PR;
- * group-chat messages currently can't reach the gate because the long-poll
- * router doesn't normalize them yet, but the code paths are symmetric so
- * M4 only has to flip `is_group_chat` and add mention detection.
- *
- * Returns `need_pair` instead of `drop` only under the `pairing` policy —
- * that signal tells the inbound service to emit a pairing-code DM. Under
- * `allowlist`, unknowns are dropped silently.
+ * PRD §9.4 three-layer gate: chat allowlist → per-chat sender allowlist →
+ * mention-policy activation (group chats only). Mention-policy is a *quiet*
+ * filter — applied after sender check, so a non-mention from a known sender
+ * is a silent drop, not a `need_pair`.
  */
-@injectable()
+@singleton()
 export class AccessGate {
   constructor(private readonly access: AccessStore) {}
 
@@ -44,7 +39,17 @@ export class AccessGate {
         : { kind: "drop", reason: "sender-not-allowed" };
     }
 
-    // mention_policy gate (group chat only) lands in M4.
+    if (msg.is_group_chat) {
+      const mentionPolicy = chat.mention_policy ?? "mention_only";
+      if (mentionPolicy === "mention_only" && !msg.mentioned_bot) {
+        return { kind: "drop", reason: "no-mention" };
+      }
+      if (mentionPolicy === "reply_only" && !msg.is_reply_to_bot) {
+        return { kind: "drop", reason: "no-reply-to-bot" };
+      }
+      // mention_policy === "all": fall through.
+    }
+
     return { kind: "allow" };
   }
 }

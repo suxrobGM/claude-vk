@@ -1,6 +1,6 @@
 import { validateEnv } from "@/env";
 
-export type Config = {
+export interface Config {
   port: number;
   httpBind: string;
   transport: "longpoll" | "callback";
@@ -11,7 +11,7 @@ export type Config = {
   vkCommunityId: string | undefined;
   vkCommunityScreenName: string | undefined;
   webhookSecret: string | undefined;
-};
+}
 
 function build(): Config {
   validateEnv();

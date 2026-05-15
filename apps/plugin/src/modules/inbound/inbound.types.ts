@@ -3,13 +3,13 @@
  * (long poll today, callback API in M6) into this so the gate, attachment
  * downloader, and notifier are transport-agnostic.
  */
-export type Attachment = {
+export interface Attachment {
   type: string;
   local_path?: string;
   url?: string;
-};
+}
 
-export type InboundMessage = {
+export interface InboundMessage {
   peer_id: number;
   from_id: number;
   conversation_message_id: number;
@@ -17,6 +17,9 @@ export type InboundMessage = {
   attachments: Attachment[];
   reply_to?: number;
   is_group_chat: boolean;
+  /** Any attention signal: text mention or reply-to-bot. Used by `mention_only`. */
   mentioned_bot: boolean;
+  /** `reply_to` matches a message the bot sent. Used by `reply_only`. */
+  is_reply_to_bot: boolean;
   received_at: string;
-};
+}

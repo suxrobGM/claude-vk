@@ -21,10 +21,13 @@ function makeMsg(over: Partial<InboundMessage> = {}): InboundMessage {
     attachments: [],
     is_group_chat: false,
     mentioned_bot: false,
+    is_reply_to_bot: false,
     received_at: new Date().toISOString(),
     ...over,
   };
 }
+
+const GROUP_PEER = 2_000_000_042;
 
 describe("AccessGate.check", () => {
   it("allows when DM policy is open", () => {
@@ -101,5 +104,151 @@ describe("AccessGate.check", () => {
       }),
     );
     expect(gate.check(makeMsg()).kind).toBe("need_pair");
+  });
+
+  it("drops a non-mention in a group chat with mention_only policy", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "mention_only",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    const r = gate.check(
+      makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true, mentioned_bot: false }),
+    );
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("no-mention");
+  });
+
+  it("allows a mention in a group chat with mention_only policy", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "mention_only",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    expect(
+      gate.check(
+        makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true, mentioned_bot: true }),
+      ).kind,
+    ).toBe("allow");
+  });
+
+  it("drops a plain mention under reply_only policy when not actually a reply-to-bot", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "reply_only",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    const r = gate.check(
+      makeMsg({
+        peer_id: GROUP_PEER,
+        from_id: 555,
+        is_group_chat: true,
+        mentioned_bot: true,
+        is_reply_to_bot: false,
+      }),
+    );
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("no-reply-to-bot");
+  });
+
+  it("allows reply_to_bot under reply_only policy", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "reply_only",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    expect(
+      gate.check(
+        makeMsg({
+          peer_id: GROUP_PEER,
+          from_id: 555,
+          is_group_chat: true,
+          is_reply_to_bot: true,
+        }),
+      ).kind,
+    ).toBe("allow");
+  });
+
+  it("allows any message under mention_policy=all", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "all",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    expect(
+      gate.check(makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true })).kind,
+    ).toBe("allow");
+  });
+
+  it("defaults to mention_only when chat has no mention_policy set", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "pairing", group_chat: "allowlist" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            added_at: new Date().toISOString(),
+            added_by: "pairing",
+          },
+        },
+      }),
+    );
+    const r = gate.check(
+      makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true, mentioned_bot: false }),
+    );
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("no-mention");
   });
 });

@@ -7,7 +7,7 @@ import type { Attachment, InboundMessage } from "./inbound.types";
  * this before calling `normalize`, so the rest of the inbound pipeline
  * stays free of vk-io types.
  */
-export type RawInbound = {
+export interface RawInbound {
   peer_id: number;
   from_id: number;
   conversation_message_id: number | undefined;
@@ -15,17 +15,13 @@ export type RawInbound = {
   text: string | undefined;
   attachments?: RawAttachment[];
   reply?: { conversation_message_id?: number; message_id?: number };
-};
+}
 
-export type RawAttachment = {
+export interface RawAttachment {
   type: string;
-  /**
-   * Optional URL the file can be fetched from. Photos pass the
-   * largest-size URL; voice/audio_message use the OGG URL; docs use
-   * the doc URL. Anything else passes whatever it has.
-   */
+  /** Photos pass largest-size URL; voice/audio_message use the OGG URL; docs use the doc URL. */
   url?: string;
-};
+}
 
 /**
  * Pure normalizer. No I/O, no DI — safe to call from any context including
@@ -46,7 +42,8 @@ export function normalize(raw: RawInbound): InboundMessage {
     attachments,
     reply_to: replyCmid,
     is_group_chat: isGroupChat(raw.peer_id),
-    mentioned_bot: false, // M4 sets this
+    mentioned_bot: false, // enriched by InboundService via MentionDetector
+    is_reply_to_bot: false, // enriched by InboundService via MentionDetector
     received_at: new Date().toISOString(),
   };
 }

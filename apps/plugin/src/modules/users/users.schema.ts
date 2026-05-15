@@ -1,4 +1,6 @@
 import { t, type Static } from "elysia";
+import { z } from "zod";
+import type { ToolFailure } from "@/common/utils/tool-envelope";
 
 /**
  * Cache of VK user/group metadata at `peers.json`. Mode 0644 — no secrets,
@@ -37,3 +39,17 @@ export const PEERS_FILE_DEFAULTS: PeersFile = {
   users: {},
   groups: {},
 };
+
+/* ------ MCP tool ($users.get) schemas ------------------------------------ */
+
+export const GetUserInfoInputShape = {
+  user_ids: z
+    .array(z.number().int())
+    .min(1)
+    .max(100)
+    .describe("VK user IDs (capped at 100 per VK's `users.get`)."),
+} as const;
+
+export type GetUserInfoInput = z.infer<z.ZodObject<typeof GetUserInfoInputShape>>;
+
+export type GetUserInfoResult = { ok: true; users: UserEntry[] } | ToolFailure;

@@ -1,18 +1,38 @@
 import "reflect-metadata";
 import { describe, expect, it } from "bun:test";
 import { PluginError, VkApiError } from "@/common/errors";
+import type { StateStore } from "@/state/state.store";
+import type { VkApi } from "@/vk/api";
 import type {
-  ApiContract,
   DeleteMessageParams,
+  DocsSaveParams,
   EditMessageParams,
+  GetDocUploadServerParams,
+  GetHistoryParams,
+  GetHistoryResponse,
+  GetPhotoUploadServerParams,
+  MarkAsReadParams,
+  SavedAttachmentRef,
+  SaveMessagesPhotoParams,
+  SearchMessagesParams,
+  SearchMessagesResponse,
   SendMessageParams,
   SendMessageResponse,
+  SendReactionParams,
+  UploadServerInfo,
   UsersGetParams,
   UsersGetResponseEntry,
-} from "@/vk/client";
+} from "@/vk/api.types";
 import { MessagingService } from "./messaging.service";
 
-class FakeApiContract implements ApiContract {
+class FakeStateStore {
+  recent: { peer_id: number; conversation_message_id: number }[] = [];
+  async pushRecentMessage(peer_id: number, conversation_message_id: number): Promise<void> {
+    this.recent.push({ peer_id, conversation_message_id });
+  }
+}
+
+class FakeVkApi implements VkApi {
   sentCalls: SendMessageParams[] = [];
   editCalls: EditMessageParams[] = [];
   deleteCalls: DeleteMessageParams[] = [];
@@ -42,17 +62,36 @@ class FakeApiContract implements ApiContract {
   async usersGet(_p: UsersGetParams): Promise<UsersGetResponseEntry[]> {
     return [];
   }
+  async sendReaction(_p: SendReactionParams): Promise<void> {}
+  async markAsRead(_p: MarkAsReadParams): Promise<void> {}
+  async getHistory(_p: GetHistoryParams): Promise<GetHistoryResponse> {
+    return { count: 0, items: [], profiles: [] };
+  }
+  async searchMessages(_p: SearchMessagesParams): Promise<SearchMessagesResponse> {
+    return { count: 0, items: [] };
+  }
+  async getPhotoUploadServer(_p: GetPhotoUploadServerParams): Promise<UploadServerInfo> {
+    return { upload_url: "" };
+  }
+  async saveMessagesPhoto(_p: SaveMessagesPhotoParams): Promise<SavedAttachmentRef> {
+    return { vk_ref: "" };
+  }
+  async getDocUploadServer(_p: GetDocUploadServerParams): Promise<UploadServerInfo> {
+    return { upload_url: "" };
+  }
+  async saveDoc(_p: DocsSaveParams): Promise<SavedAttachmentRef> {
+    return { vk_ref: "" };
+  }
 }
 
-function makeService(vk: ApiContract): MessagingService {
-  // Bypass DI: construct directly with the contract. The service only depends
-  // on VkClient's contract methods, so the cast is sound for tests.
-  return new MessagingService(vk as never);
+function makeService(vk: VkApi, state: FakeStateStore = new FakeStateStore()): MessagingService {
+  // Bypass DI: construct directly with the contract + a stub state store.
+  return new MessagingService(vk as never, state as unknown as StateStore);
 }
 
 describe("MessagingService.send", () => {
   it("returns ok with one cmid for short text", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     const result = await svc.send({ peer_id: 42, text: "hello" });
     expect(result).toEqual({ ok: true, conversation_message_ids: [1000] });
@@ -62,7 +101,7 @@ describe("MessagingService.send", () => {
   });
 
   it("auto-chunks text past 4096 chars", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     const text = "a".repeat(4097);
     const result = await svc.send({ peer_id: 42, text });
@@ -75,7 +114,7 @@ describe("MessagingService.send", () => {
   });
 
   it("attaches reply_to only to the first chunk", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     const text = "a".repeat(8000);
     await svc.send({ peer_id: 42, text, reply_to: 999 });
@@ -86,7 +125,7 @@ describe("MessagingService.send", () => {
   });
 
   it("returns failure envelope on VkApiError", async () => {
-    const vk = new FakeApiContract({
+    const vk = new FakeVkApi({
       send: async () => {
         throw new VkApiError(9, "flood control");
       },
@@ -102,7 +141,7 @@ describe("MessagingService.send", () => {
   });
 
   it("returns plugin-error envelope on PluginError (e.g. token missing)", async () => {
-    const vk = new FakeApiContract({
+    const vk = new FakeVkApi({
       send: async () => {
         throw new PluginError("vk_token_missing", "no token");
       },
@@ -117,7 +156,7 @@ describe("MessagingService.send", () => {
   });
 
   it("returns internal_error envelope on unexpected throw", async () => {
-    const vk = new FakeApiContract({
+    const vk = new FakeVkApi({
       send: async () => {
         throw new TypeError("boom");
       },
@@ -130,11 +169,21 @@ describe("MessagingService.send", () => {
       expect(result.message).toBe("boom");
     }
   });
+
+  it("pushes every outbound cmid into the recent-messages ring", async () => {
+    const vk = new FakeVkApi();
+    const state = new FakeStateStore();
+    const svc = makeService(vk, state);
+    const text = "a".repeat(8000);
+    await svc.send({ peer_id: 42, text });
+    expect(state.recent.length).toBe(vk.sentCalls.length);
+    expect(state.recent.every((r) => r.peer_id === 42)).toBe(true);
+  });
 });
 
 describe("MessagingService.edit", () => {
   it("forwards to vk.editMessage and returns ok", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     const result = await svc.edit({
       peer_id: 42,
@@ -146,7 +195,7 @@ describe("MessagingService.edit", () => {
   });
 
   it("surfaces VK errors via envelope", async () => {
-    const vk = new FakeApiContract({
+    const vk = new FakeVkApi({
       edit: async () => {
         throw new VkApiError(909, "cannot edit");
       },
@@ -164,7 +213,7 @@ describe("MessagingService.edit", () => {
 
 describe("MessagingService.delete", () => {
   it("maps delete_for_all=true to 1 in the API call", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     await svc.delete({ peer_id: 42, conversation_message_id: 99, delete_for_all: true });
     expect(vk.deleteCalls).toEqual([
@@ -173,7 +222,7 @@ describe("MessagingService.delete", () => {
   });
 
   it("maps delete_for_all=false to 0 in the API call", async () => {
-    const vk = new FakeApiContract();
+    const vk = new FakeVkApi();
     const svc = makeService(vk);
     await svc.delete({ peer_id: 42, conversation_message_id: 99, delete_for_all: false });
     expect(vk.deleteCalls[0]!.delete_for_all).toBe(0);

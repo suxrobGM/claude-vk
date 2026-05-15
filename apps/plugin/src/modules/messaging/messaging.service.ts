@@ -1,13 +1,19 @@
-import { injectable } from "tsyringe";
-import { PluginError, VkApiError } from "@/common/errors";
+import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
+import { runWithEnvelope } from "@/common/utils/tool-envelope";
+import { StateStore } from "@/state/state.store";
+import type { VkApi } from "@/vk/api";
 import { chunkText } from "@/vk/chunk-text";
-import { VkClient, type ApiContract } from "@/vk/client";
+import { VkClient } from "@/vk/client";
 import {
   type DeleteMessageInput,
   type DeleteMessageResult,
   type EditMessageInput,
   type EditMessageResult,
+  type MarkReadInput,
+  type MarkReadResult,
+  type ReactInput,
+  type ReactResult,
   type SendMessageInput,
   type SendMessageResult,
 } from "./messaging.schema";
@@ -20,9 +26,12 @@ import { nextRandomId } from "./random-id";
  * Unexpected (non-VK) errors propagate so the tool wrapper can log them and
  * surface a generic error envelope.
  */
-@injectable()
+@singleton()
 export class MessagingService {
-  constructor(private readonly vk: VkClient) {}
+  constructor(
+    private readonly vk: VkClient,
+    private readonly state: StateStore,
+  ) {}
 
   /**
    * Sends `text` to `peer_id`, auto-chunked at 4096 chars. Returns every
@@ -58,9 +67,32 @@ export class MessagingService {
     });
   }
 
+  /** Add/replace a reaction on a message via VK `messages.sendReaction`. */
+  async react(input: ReactInput): Promise<ReactResult> {
+    return runWithEnvelope("react", async () => {
+      await this.vk.sendReaction({
+        peer_id: input.peer_id,
+        cmid: input.conversation_message_id,
+        reaction_id: input.reaction_id,
+      });
+      return { ok: true } as const;
+    });
+  }
+
+  /** Mark a peer's messages read via VK `messages.markAsRead`. */
+  async markRead(input: MarkReadInput): Promise<MarkReadResult> {
+    return runWithEnvelope("mark_read", async () => {
+      await this.vk.markAsRead({
+        peer_id: input.peer_id,
+        start_message_id: input.start_message_id,
+      });
+      return { ok: true } as const;
+    });
+  }
+
   private async sendInternal(
     input: SendMessageInput,
-    vk: ApiContract,
+    vk: VkApi,
   ): Promise<{ ok: true; conversation_message_ids: number[] }> {
     const chunks = chunkText(input.text);
     const cmids: number[] = [];
@@ -73,46 +105,13 @@ export class MessagingService {
         random_id: nextRandomId(),
       });
       cmids.push(res.conversation_message_id);
+      // Feed the recent-messages ring so M4's reply-to-bot detection works.
+      await this.state.pushRecentMessage(input.peer_id, res.conversation_message_id);
     }
     logger.info(
       { peer_id: input.peer_id, chunks: chunks.length, first_cmid: cmids[0] },
       "send_message ok",
     );
     return { ok: true, conversation_message_ids: cmids };
-  }
-}
-
-/**
- * Wraps a tool body with the shared envelope translation: known errors collapse
- * into structured `{ ok: false }` results; unknown errors are logged and
- * returned as `{ ok: false, code: "internal_error" }` rather than propagated,
- * so MCP never closes the connection on a tool exception.
- */
-async function runWithEnvelope<R extends { ok: true }>(
-  tool: string,
-  body: () => Promise<R>,
-): Promise<R | { ok: false; code: string; message: string; vk_error_code?: number }> {
-  try {
-    return await body();
-  } catch (err) {
-    if (err instanceof VkApiError) {
-      logger.warn({ tool, code: err.code, vk_error_code: err.vkErrorCode }, "vk error");
-      return {
-        ok: false,
-        code: err.code,
-        message: err.message,
-        vk_error_code: err.vkErrorCode,
-      };
-    }
-    if (err instanceof PluginError) {
-      logger.warn({ tool, code: err.code }, "plugin error");
-      return { ok: false, code: err.code, message: err.message };
-    }
-    logger.error({ tool, err }, "unexpected tool error");
-    return {
-      ok: false,
-      code: "internal_error",
-      message: err instanceof Error ? err.message : String(err),
-    };
   }
 }

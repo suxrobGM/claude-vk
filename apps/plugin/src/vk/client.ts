@@ -1,92 +1,60 @@
 import { singleton } from "tsyringe";
 import { VK } from "vk-io";
-import { PluginError } from "@/common/errors";
+import { PluginError, VkApiError } from "@/common/errors";
 import { current } from "@/config";
+import type { VkApi } from "./api";
+import type {
+  DeleteMessageParams,
+  DocsSaveParams,
+  EditMessageParams,
+  GetDocUploadServerParams,
+  GetHistoryParams,
+  GetHistoryResponse,
+  GetPhotoUploadServerParams,
+  MarkAsReadParams,
+  SavedAttachmentRef,
+  SaveMessagesPhotoParams,
+  SearchMessagesParams,
+  SearchMessagesResponse,
+  SendMessageParams,
+  SendMessageResponse,
+  SendReactionParams,
+  UploadServerInfo,
+  UsersGetParams,
+  UsersGetResponseEntry,
+} from "./api.types";
+import { toHistoryMessage, toSendResponse } from "./mappers";
 import { RateLimiter } from "./rate-limiter";
 
 const VK_API_VERSION = "5.199";
 
-export interface SendMessageParams {
-  peer_id: number;
-  message: string;
-  reply_to?: number;
-  random_id: number;
-}
-
-export interface EditMessageParams {
-  peer_id: number;
-  conversation_message_id: number;
-  message: string;
-}
-
-export interface DeleteMessageParams {
-  peer_id: number;
-  conversation_message_ids: number[];
-  delete_for_all: 0 | 1;
-}
-
-export interface UsersGetParams {
-  user_ids: string; // comma-separated ids or screen names; VK accepts either
-  fields?: string;
-}
-
-export interface UsersGetResponseEntry {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  screen_name?: string;
-  photo_100?: string;
-  deactivated?: string;
-}
-
-export interface SendMessageResponse {
-  conversation_message_id: number;
-  message_id: number;
-}
-
 /**
- * Narrow contract messaging tools depend on. Tests pass a plain-object impl —
- * the real implementation lives on `VkClient` below and routes through vk-io.
- */
-export interface ApiContract {
-  sendMessage(p: SendMessageParams): Promise<SendMessageResponse>;
-  editMessage(p: EditMessageParams): Promise<number>;
-  deleteMessage(p: DeleteMessageParams): Promise<Record<string, number>>;
-  usersGet(p: UsersGetParams): Promise<UsersGetResponseEntry[]>;
-}
-
-/**
- * Singleton VK API client. Lazily constructs the underlying vk-io instance on
- * the first method call so the process can boot without `VK_TOKEN` set —
- * `/healthz` and `/readyz` stay reachable during initial setup. Tools that
- * require VK surface `vk_token_missing` as a structured error envelope at
- * call time.
- *
- * Every API method is wrapped through `RateLimiter.withRetry` so the 20 req/s
- * group quota and the VK error 6 / error 9 policy apply uniformly.
+ * Singleton VK API client. Lazily constructs vk-io on first call so the
+ * process boots without `VK_TOKEN` set — `/healthz` stays reachable and tools
+ * surface `vk_token_missing` as a structured envelope. Every method goes
+ * through `RateLimiter.withRetry`.
  */
 @singleton()
-export class VkClient implements ApiContract {
+export class VkClient implements VkApi {
   private vk: VK | null = null;
 
   constructor(private readonly limiter: RateLimiter) {}
 
   sendMessage(p: SendMessageParams): Promise<SendMessageResponse> {
-    return this.limiter.withRetry(async () => {
-      const vk = this.getVk();
-      const res = await vk.api.messages.send({
-        peer_id: p.peer_id,
-        message: p.message,
-        random_id: p.random_id,
-        reply_to: p.reply_to,
-      });
-      return normalizeSendResponse(res);
-    });
+    return this.run((vk) =>
+      vk.api.messages
+        .send({
+          peer_id: p.peer_id,
+          message: p.message,
+          random_id: p.random_id,
+          reply_to: p.reply_to,
+        })
+        .then(toSendResponse),
+    );
   }
 
   editMessage(p: EditMessageParams): Promise<number> {
-    return this.limiter.withRetry(async () => {
-      const vk = this.getVk();
+    return this.run(async (vk) => {
       const res = await vk.api.messages.edit({
         peer_id: p.peer_id,
         conversation_message_id: p.conversation_message_id,
@@ -99,8 +67,7 @@ export class VkClient implements ApiContract {
   }
 
   deleteMessage(p: DeleteMessageParams): Promise<Record<string, number>> {
-    return this.limiter.withRetry(async () => {
-      const vk = this.getVk();
+    return this.run(async (vk) => {
       const res = await vk.api.messages.delete({
         peer_id: p.peer_id,
         cmids: p.conversation_message_ids,
@@ -111,8 +78,7 @@ export class VkClient implements ApiContract {
   }
 
   usersGet(p: UsersGetParams): Promise<UsersGetResponseEntry[]> {
-    return this.limiter.withRetry(async () => {
-      const vk = this.getVk();
+    return this.run(async (vk) => {
       const res = await vk.api.users.get({
         user_ids: p.user_ids.split(",").map((s) => s.trim()),
         fields: (p.fields ? p.fields.split(",").map((s) => s.trim()) : undefined) as never,
@@ -121,9 +87,109 @@ export class VkClient implements ApiContract {
     });
   }
 
+  sendReaction(p: SendReactionParams): Promise<void> {
+    return this.run(async (vk) => {
+      await vk.api.messages.sendReaction({
+        peer_id: p.peer_id,
+        cmid: p.cmid,
+        reaction_id: p.reaction_id,
+      });
+    });
+  }
+
+  markAsRead(p: MarkAsReadParams): Promise<void> {
+    return this.run(async (vk) => {
+      await vk.api.messages.markAsRead({
+        peer_id: p.peer_id,
+        start_message_id: p.start_message_id,
+      });
+    });
+  }
+
+  getHistory(p: GetHistoryParams): Promise<GetHistoryResponse> {
+    return this.run(async (vk) => {
+      const res = (await vk.api.messages.getHistory({
+        peer_id: p.peer_id,
+        count: p.count,
+        offset: p.offset,
+        start_message_id: p.start_message_id,
+        extended: p.extended,
+      } as never)) as unknown as {
+        count: number;
+        items: unknown[];
+        profiles?: UsersGetResponseEntry[];
+      };
+      return {
+        count: res.count,
+        items: res.items.map(toHistoryMessage),
+        profiles: res.profiles ?? [],
+      };
+    });
+  }
+
+  searchMessages(p: SearchMessagesParams): Promise<SearchMessagesResponse> {
+    return this.run(async (vk) => {
+      const res = (await vk.api.messages.search({
+        q: p.q,
+        peer_id: p.peer_id,
+        count: p.count,
+        offset: p.offset,
+      } as never)) as unknown as { count: number; items: unknown[] };
+      return { count: res.count, items: res.items.map(toHistoryMessage) };
+    });
+  }
+
+  getPhotoUploadServer(p: GetPhotoUploadServerParams): Promise<UploadServerInfo> {
+    return this.run(async (vk) => {
+      const res = await vk.api.photos.getMessagesUploadServer({ peer_id: p.peer_id });
+      return { upload_url: (res as { upload_url: string }).upload_url };
+    });
+  }
+
+  saveMessagesPhoto(p: SaveMessagesPhotoParams): Promise<SavedAttachmentRef> {
+    return this.run(async (vk) => {
+      const res = await vk.api.photos.saveMessagesPhoto({
+        photo: p.photo,
+        server: p.server,
+        hash: p.hash,
+      });
+      const item = (res as Array<{ owner_id: number; id: number }>)[0];
+      if (!item) throw new VkApiError(0, "photos.saveMessagesPhoto returned empty array");
+      return { vk_ref: `photo${item.owner_id}_${item.id}` };
+    });
+  }
+
+  getDocUploadServer(p: GetDocUploadServerParams): Promise<UploadServerInfo> {
+    return this.run(async (vk) => {
+      const res = await vk.api.docs.getMessagesUploadServer({
+        peer_id: p.peer_id,
+        type: p.type,
+      });
+      return { upload_url: (res as { upload_url: string }).upload_url };
+    });
+  }
+
+  saveDoc(p: DocsSaveParams): Promise<SavedAttachmentRef> {
+    return this.run(async (vk) => {
+      const res = await vk.api.docs.save({ file: p.file, title: p.title });
+      const item = res as {
+        doc?: { owner_id: number; id: number };
+        audio_message?: { owner_id: number; id: number };
+      };
+      const doc = item.doc ?? item.audio_message;
+      if (!doc) throw new VkApiError(0, "docs.save returned no doc payload");
+      return { vk_ref: `doc${doc.owner_id}_${doc.id}` };
+    });
+  }
+
   /** Test/hot-reload helper: drop the cached vk-io instance. */
   reset(): void {
     this.vk = null;
+  }
+
+  /** Wrap one vk-io call with the shared rate-limit-plus-retry policy. */
+  private run<T>(fn: (vk: VK) => Promise<T>): Promise<T> {
+    return this.limiter.withRetry(() => fn(this.getVk()));
   }
 
   private getVk(): VK {
@@ -138,26 +204,4 @@ export class VkClient implements ApiContract {
     this.vk = new VK({ token, apiVersion: VK_API_VERSION });
     return this.vk;
   }
-}
-
-/**
- * vk-io's `messages.send` returns either a numeric message id (single-peer
- * call) or an array of per-peer results when `peer_ids` is used. M1 only ever
- * uses the single-peer form, but we need to coerce both shapes into our
- * `conversation_message_id` contract. When VK returns the bare numeric id we
- * mirror it as the cmid since callers only ever index by cmid downstream.
- */
-function normalizeSendResponse(res: unknown): SendMessageResponse {
-  if (typeof res === "number") {
-    return { conversation_message_id: res, message_id: res };
-  }
-  if (typeof res === "object" && res !== null) {
-    const obj = res as Record<string, unknown>;
-    const cmid = Number(obj.conversation_message_id ?? obj.message_id);
-    const mid = Number(obj.message_id ?? obj.conversation_message_id);
-    if (Number.isFinite(cmid) && Number.isFinite(mid)) {
-      return { conversation_message_id: cmid, message_id: mid };
-    }
-  }
-  throw new Error(`Unexpected messages.send response shape: ${JSON.stringify(res)}`);
 }

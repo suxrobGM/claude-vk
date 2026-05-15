@@ -1,6 +1,7 @@
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { AccessGate } from "@/modules/access/access.gate";
+import { isPairCommand, MentionDetector } from "@/modules/access/mention";
 import { PairingService } from "@/modules/access/pairing";
 import { UsersCache } from "@/modules/users/users.cache";
 import { AttachmentService } from "./attachments";
@@ -22,6 +23,7 @@ export class InboundService {
     private readonly pairing: PairingService,
     private readonly attachments: AttachmentService,
     private readonly users: UsersCache,
+    private readonly mentions: MentionDetector,
   ) {}
 
   /** Wires the live channel notifier; called once from `inbound.startup`. */
@@ -33,6 +35,10 @@ export class InboundService {
   async handle(raw: RawInbound): Promise<void> {
     try {
       const msg = normalize(raw);
+      const signals = this.mentions.detect(msg);
+      msg.mentioned_bot = signals.name_mention || signals.reply_to_bot || signals.keyboard_payload;
+      msg.is_reply_to_bot = signals.reply_to_bot;
+
       const verdict = this.gate.check(msg);
       if (verdict.kind === "drop") {
         logger.debug(
@@ -42,6 +48,9 @@ export class InboundService {
         return;
       }
       if (verdict.kind === "need_pair") {
+        // Group chats need an explicit `@<community> pair` trigger; otherwise
+        // the bot would spam codes the moment it joins. DMs auto-emit.
+        if (msg.is_group_chat && !isPairCommand(msg, signals)) return;
         await this.pairing.emitCode(msg);
         return;
       }

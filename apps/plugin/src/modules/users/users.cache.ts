@@ -50,21 +50,24 @@ export class UsersCache {
 
   /** Resolve a user_id to a display name. Always returns *some* string. */
   async resolve(userId: number): Promise<string> {
+    return (await this.getFull(userId))?.name ?? `user_${userId}`;
+  }
+
+  /**
+   * Resolve a user_id to its full cached entry. Hits the in-memory cache when
+   * fresh (< 1h), otherwise fetches from VK and persists. Returns the stale
+   * cached entry if VK is unreachable; `null` only when never seen.
+   */
+  async getFull(userId: number): Promise<UserEntry | null> {
     const cached = this.getCached(userId);
     if (cached && !isStale(cached)) {
-      return cached.name;
+      return cached;
     }
-
     const fetched = await this.fetchOne(userId);
     if (fetched) {
-      return fetched.name;
+      return fetched;
     }
-
-    // stale beats fallback
-    if (cached) {
-      return cached.name;
-    }
-    return `user_${userId}`;
+    return cached;
   }
 
   /** Resolve a `screen_name` (with or without leading `@`) to a user_id. */

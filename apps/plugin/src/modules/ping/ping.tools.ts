@@ -1,11 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { injectable } from "tsyringe";
+import { singleton } from "tsyringe";
 
 /**
  * Smoke-test tool with no VK dependency. Useful for verifying the channel is
  * connected without requiring `VK_TOKEN` to be set.
  */
-@injectable()
+@singleton()
 export class PingTools {
   register(server: McpServer): void {
     server.registerTool(

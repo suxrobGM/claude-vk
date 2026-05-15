@@ -1,12 +1,12 @@
 import { singleton } from "tsyringe";
 
-export type RuntimeStatus = {
+export interface RuntimeStatus {
   transport: "longpoll" | "callback" | "none";
   vk_connected: boolean;
   last_error: string | null;
   last_error_at: string | null;
   last_event_at: string | null;
-};
+}
 
 /**
  * Tiny in-process status sink the long-poll loop and webhook receiver write
