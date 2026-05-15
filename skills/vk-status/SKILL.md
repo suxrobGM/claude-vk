@@ -20,10 +20,9 @@ into a single summary.
 2. `curl -s http://127.0.0.1:6060/readyz` — `{"ok":true,"mcp":true}` once
    the MCP transport is connected.
 3. `curl -s http://127.0.0.1:6060/admin/state` — runtime block with
-   `transport`, `vk_connected`, `last_error`, `last_event_at`, plus the
-   persisted `longpoll` cursor and `recent_messages_count`.
+   `vk_connected`, `last_error`, `last_event_at`, plus `recent_messages_count`.
 4. `curl -s http://127.0.0.1:6060/admin/config` — effective config with
-   `vk_token` and `webhook_secret` redacted to `"***"`.
+   `vk_token` redacted to `"***"`.
 5. `curl -s http://127.0.0.1:6060/admin/access/policies` — current DM and
    group-chat policies.
 6. `curl -s http://127.0.0.1:6060/admin/access/chats` — allowed chat count
@@ -35,7 +34,7 @@ Render as a compact status block, e.g.:
 
 ```
 VK channel
-  transport:        longpoll  (connected)
+  connected:        true
   community:        @claude_vk  (id 123456789)
   last event:       2026-05-14T10:42:18Z
   policies:         dm=allowlist, group_chat=pairing

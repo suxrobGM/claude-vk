@@ -11,9 +11,9 @@ import type { ChannelNotifier } from "./notifier";
 
 /**
  * Inbound pipeline: gate → (pair | download + notify). Every branch swallows
- * exceptions so the webhook controller's 2xx contract is preserved. The
- * notifier is injected from `app.ts` at boot (it carries the live `McpServer`
- * handle) rather than via the container.
+ * exceptions so the long-poll loop keeps running. The notifier is injected
+ * from `app.ts` at boot (it carries the live `McpServer` handle) rather than
+ * via the container.
  */
 @singleton()
 export class InboundService {

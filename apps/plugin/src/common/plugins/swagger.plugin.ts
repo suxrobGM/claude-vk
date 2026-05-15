@@ -8,8 +8,9 @@ export const swaggerPlugin = new Elysia({ name: "swagger", prefix: "/api" }).use
         title: "claude-vk admin API",
         version: "0.1.0",
         description:
-          "Local-only HTTP surface for the VK channel plugin. Health probes, webhook " +
-          "receiver (when transport=callback), and admin endpoints consumed by the /vk:* skills.",
+          "Local-only HTTP surface for the VK channel plugin. Health probes and " +
+          "admin endpoints consumed by the /vk:* skills. No inbound transport — VK " +
+          "events arrive via Bots Long Poll (outbound HTTPS).",
       },
       tags: [
         { name: "Health", description: "Liveness and readiness probes." },

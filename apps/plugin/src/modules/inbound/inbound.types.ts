@@ -1,6 +1,6 @@
 /**
- * Normalized inbound message shape. The router collapses every transport
- * (long poll today, callback API in M6) into this so the gate, attachment
+ * Normalized inbound message shape. `message-adapter` translates `vk-io`'s
+ * long-poll `message_new` payload into this so the gate, attachment
  * downloader, and notifier are transport-agnostic.
  */
 export interface Attachment {

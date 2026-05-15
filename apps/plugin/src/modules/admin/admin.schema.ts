@@ -4,13 +4,10 @@ import { NullableString } from "@/types/common.schema";
 /** Sanitized snapshot of effective configuration — secrets are redacted. */
 export const ConfigResponseSchema = t.Object({
   port: t.Number(),
-  http_bind: t.String(),
   state_dir: t.String(),
   vk_community_id: NullableString,
   vk_community_screen_name: NullableString,
   vk_token: NullableString,
-  webhook_secret: NullableString,
-  webhook_confirmation: NullableString,
 });
 
 /** Process-runtime status snapshot. */

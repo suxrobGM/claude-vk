@@ -2,10 +2,7 @@ import { validateEnv } from "@/env";
 
 export interface Config {
   port: number;
-  httpBind: string;
   vkToken?: string;
-  webhookSecret?: string;
-  webhookConfirmation?: string;
 }
 
 let validated = false;
@@ -26,9 +23,6 @@ export function current(): Config {
   ensureValidated();
   return {
     port: Number(process.env.VK_PORT!),
-    httpBind: process.env.VK_HTTP_BIND!,
     vkToken: process.env.VK_TOKEN,
-    webhookSecret: process.env.VK_WEBHOOK_SECRET,
-    webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION,
   };
 }

@@ -7,9 +7,6 @@ import { envPath } from "@/state/paths";
 const EnvSchema = t.Object({
   VK_TOKEN: t.Optional(t.String({ minLength: 1 })),
   VK_PORT: t.Optional(t.String({ default: "6060", pattern: "^[0-9]+$" })),
-  VK_HTTP_BIND: t.Optional(t.String({ default: "127.0.0.1" })),
-  VK_WEBHOOK_SECRET: t.Optional(t.String()),
-  VK_WEBHOOK_CONFIRMATION: t.Optional(t.String({ minLength: 1 })),
 
   LOG_LEVEL: t.Optional(t.String({ default: "info" })),
   NODE_ENV: t.Optional(
@@ -27,25 +24,6 @@ declare global {
 }
 
 /**
- * Reads ~/.claude/channels/vk/.env via dotenv. Pure: does not mutate
- * process.env. Re-callable — M1 watcher invokes this on every .env change.
- */
-export function readEnvFile(): Record<string, string> {
-  try {
-    chmodSync(envPath, 0o600);
-  } catch {
-    // No-op on Windows or if file does not exist yet.
-  }
-  let raw: Buffer;
-  try {
-    raw = readFileSync(envPath);
-  } catch {
-    return {};
-  }
-  return parse(raw);
-}
-
-/**
  * Merge the .env file under process.env (shell wins), validate against the
  * schema, write schema-declared defaults back to process.env so consumers can
  * read `process.env.VK_PORT!` without repeating `?? "6060"` at every call site.
@@ -53,7 +31,7 @@ export function readEnvFile(): Record<string, string> {
  * Throws on validation failure to prevent startup with invalid configuration.
  */
 export function validateEnv(): void {
-  const fileEnv = readEnvFile();
+  const fileEnv = parse(envPath);
   const merged: Record<string, string | undefined> = { ...fileEnv };
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) merged[key] = value;

@@ -8,7 +8,7 @@ export interface RuntimeStatus {
 }
 
 /**
- * Tiny in-process status sink the webhook receiver writes to and the
+ * Tiny in-process status sink the long-poll loop writes to and the
  * `/admin/state` endpoint reads. Reset on every restart — the truth re-emerges
  * from the next inbound event.
  */

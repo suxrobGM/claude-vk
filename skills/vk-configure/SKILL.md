@@ -29,11 +29,8 @@ Arguments passed: `$ARGUMENTS`
 4. After the bot DMs the user a 6-character pairing code, finish setup with
    `/vk:access pair <code>`. See [vk-access](../vk-access/SKILL.md).
 
-## Future shape (M6+)
+## Prerequisite — enable Long Poll in the community admin
 
-```
-/vk:configure --callback https://vk.example.com/webhook/vk
-```
-
-Sets `VK_TRANSPORT=callback` and `VK_WEBHOOK_SECRET`; prints the VK
-confirmation string to paste into the community's Callback API settings.
+vk.com → Manage → API usage → Long Poll API → **Enabled**, API version
+≥ `5.199`, check the `message_new` event. Without this, `groups.getLongPollServer`
+returns no server and the loop sits in backoff.

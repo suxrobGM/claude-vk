@@ -1,6 +1,6 @@
 /**
- * Errors thrown from Elysia handlers (admin API + webhook). Mirrors the
- * ogstack HttpError shape so the standard error response schema in
+ * Errors thrown from Elysia handlers (admin API). Mirrors the ogstack
+ * HttpError shape so the standard error response schema in
  * `@/types/response` works without translation.
  */
 export class HttpError extends Error {

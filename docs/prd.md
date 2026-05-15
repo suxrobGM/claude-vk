@@ -1,19 +1,26 @@
 # PRD — VK Plugin for Claude Code
 
-**Status:** Draft v0.3
+**Status:** Draft v0.4
 **Owner:** TBD
 **Last updated:** 2026-05-15
 **References:**
 
 - [Telegram plugin](https://github.com/anthropics/claude-plugins-official/blob/main/external_plugins/telegram/README.md)
 - [Channels reference (code.claude.com)](https://code.claude.com/docs/en/channels-reference)
+- [VK Bots Long Poll API](https://dev.vk.com/ru/api/bots-long-poll/getting-started)
+
+**Revision notes (v0.4):**
+
+- Callback API removed. **VK Bots Long Poll is the only inbound transport.** No public URL, no reverse proxy required. `vk-io`'s `updates.start()` owns the poll cursor and key refresh; we wrap it with a connect-backoff loop.
+- `VK_WEBHOOK_SECRET`, `VK_WEBHOOK_CONFIRMATION`, and `VK_HTTP_BIND` env vars are gone. The Elysia listener is hard-bound to `127.0.0.1` (admin + health only).
+- `EventIdDedup` removed — long poll does not retry-deliver events, so the in-memory dedup ring is unnecessary.
+- `/webhook/vk` HTTP route deleted along with `webhook.service.ts`, `webhook.schema.ts`, `event-dedup.ts`, and `inbound.controller.ts`. `webhook-adapter.ts` is now transport-agnostic `message-adapter.ts`.
 
 **Revision notes (v0.3):**
 
-- Long Poll transport removed. **Callback API is the only inbound transport.** Users front `127.0.0.1:6060/webhook/vk` with a reverse proxy (Caddy / Cloudflare Tunnel / ngrok).
 - Permission relay is **always on** — the `claude/channel/permission` capability is unconditionally advertised. No opt-in flag.
 - Community `id` + `screen_name` are auto-resolved at startup via `groups.getById`; no longer require `VK_COMMUNITY_ID` / `VK_COMMUNITY_SCREEN_NAME` env vars.
-- `state.json` and `config.json` are gone. Only `access.json` and `peers.json` are persisted. Webhook event-ID dedup and recent-sent-cmid tracking moved to in-memory rings (`EventIdDedup`, `RecentSentMessages`).
+- `state.json` and `config.json` are gone. Only `access.json` and `peers.json` are persisted. Recent-sent-cmid tracking lives in an in-memory ring (`RecentSentMessages`).
 - DM `open` policy removed. Both peer types use `pairing` (default) or `allowlist`.
 - `VK_LOCALE` removed; pairing-prompt copy is English only.
 - `VK_STATE_DIR` removed; state dir is always `~/.claude/channels/vk`.
@@ -35,8 +42,8 @@ A Claude Code plugin that connects a VK.com community (or, optionally, a user ac
 The plugin ships as a single Bun process containing:
 
 1. An **MCP server** (stdio transport) — the contract surface for Claude Code.
-2. An **ElysiaJS HTTP service** — VK Callback API webhook receiver, local management/admin endpoints, health checks.
-3. A **VK client** built on `vk-io`.
+2. An **ElysiaJS HTTP service** — local management/admin endpoints + health checks, bound to `127.0.0.1`. No inbound HTTP surface.
+3. A **VK client** built on `vk-io`, which also owns the **Bots Long Poll** loop for inbound `message_new` events.
 4. A **JSON file store** for access policy and cached VK metadata. No database — both files are human-readable JSON the user can edit by hand, and the server hot-reloads `access.json` on change.
 
 The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allowlist) and extends it where VK's richer API allows (history, search, reactions, attachments fetched on demand).
@@ -49,7 +56,7 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 - **Inbound forwarding.** Messages directed at the bound identity are surfaced to Claude with author identity and any attachments resolved to local paths.
 - **Outbound assistant actions.** Claude can send, edit, delete, react, mark read, and upload attachments.
 - **Use the parts of VK's API that Telegram bots can't reach.** History fetch, message search, and conversation lookup are first-class tools — not a workaround.
-- **Webhook-driven inbound.** VK Callback API is the only transport. Users front `127.0.0.1:6060/webhook/vk` with their own reverse proxy (Caddy / Cloudflare Tunnel / ngrok). The trade-off vs. Long Poll: public URL required, but the surface area is one HTTP route and the inbound path stays simple.
+- **Long-poll inbound.** VK Bots Long Poll is the only transport. No public URL, no reverse proxy, works behind NAT. `vk-io` owns the poll cursor + key refresh; we wrap it with a connect-backoff loop and a `message_new` handler.
 - **Multi-peer-safe access control.** VK's social graph is broader than a Telegram DM bot's; pairing + allowlist must work for both 1:1 and group chats.
 - **First-class group chat support.** Unlike the Telegram plugin (which defers groups to `ACCESS.md`), v1 ships with chat-level + sender-level allowlists and mention-detection, so the bot can sit in a community chat and only react when invoked.
 
@@ -92,40 +99,39 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 │                  vk-plugin (Bun process)                      │
 │                                                               │
 │  ┌────────────────┐   ┌──────────────────┐   ┌─────────────┐ │
-│  │ Webhook        │──▶│ MCP server       │   │ ElysiaJS    │ │
-│  │  receiver +    │   │  (stdio)         │   │  :6060      │ │
-│  │  dedup ring    │   │                  │   │  /webhook   │ │
-│  └────────────────┘   └──────────────────┘   │  /admin/*   │ │
-│         ▲                     │              │  /healthz   │ │
-│         │                     ▼              └──────┬──────┘ │
-│  ┌──────┴──────┐       ┌─────────────────────┐     │         │
+│  │ Long-poll loop │──▶│ MCP server       │   │ ElysiaJS    │ │
+│  │  (vk-io        │   │  (stdio)         │   │  127.0.0.1  │ │
+│  │   updates)     │   │                  │   │  :6060      │ │
+│  └────────┬───────┘   └──────────────────┘   │  /admin/*   │ │
+│           │                   │              │  /healthz   │ │
+│           ▼                   ▼              └──────┬──────┘ │
+│  ┌─────────────┐       ┌─────────────────────┐     │         │
 │  │  vk-io      │       │  JSON file store    │◀────┘         │
 │  │  API client │       │  ~/.claude/         │               │
 │  │             │       │   channels/vk/      │               │
 │  │             │       │     access.json     │               │
 │  │             │       │     peers.json      │               │
-│  └─────────────┘       └─────────────────────┘               │
-└────────────▲──────────────────────────────────────────────────┘
-             │ webhook POST (via user-managed reverse proxy)
-             ▼
-        VK.com Callback API
+│  └──────┬──────┘       └─────────────────────┘               │
+└─────────┼─────────────────────────────────────────────────────┘
+          │ HTTPS (groups.getLongPollServer + a_check)
+          ▼
+     VK.com Bots Long Poll
 ```
 
 ### 5.1 Why ElysiaJS
 
-ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `VK_PORT`) and serves:
+ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `VK_PORT`) and serves the local admin + health surface only — there is no inbound HTTP route. Routes:
 
-- `POST /webhook/vk` — Callback API receiver, including VK's challenge-response confirmation and secret-key validation. Always mounted.
 - `GET /healthz`, `GET /readyz` — for users running the plugin under `tmux`, `systemd`, or similar.
 - `POST /admin/access/*`, `GET /admin/state`, `GET /admin/config` — surfaced to the slash commands so they don't have to edit JSON files directly. Edits go through Elysia handlers that validate and atomically write `access.json`; the `fs.watch` on that file picks up the change in-process.
 
-Elysia is chosen over Hono / raw `Bun.serve` for end-to-end type inference on routes, native Bun runtime support, and clean validation via Elysia's `t` schemas — which we also use to validate VK Callback payloads.
+Elysia is chosen over Hono / raw `Bun.serve` for end-to-end type inference on routes, native Bun runtime support, and clean validation via Elysia's `t` schemas.
 
 ### 5.2 Process model
 
-Single Bun process. Claude Code spawns it under stdio for the MCP transport; the same process binds **`127.0.0.1:6060`** for the Elysia routes (admin + health + webhook on the same port). To expose Callback API to VK, the user fronts `127.0.0.1:6060` with their own reverse proxy (Caddy, Cloudflare Tunnel, ngrok); we never bind `0.0.0.0` unless the user sets `VK_HTTP_BIND=0.0.0.0` and accepts the warning.
+Single Bun process. Claude Code spawns it under stdio for the MCP transport; the same process binds **`127.0.0.1:6060`** for the Elysia routes (admin + health). The listener is hard-bound to `127.0.0.1` — there's no inbound HTTP, so there's nothing to expose. If port 6060 conflicts, override via `VK_PORT`.
 
-If port 6060 conflicts, override via `VK_PORT`.
+Inbound VK events arrive via `vk-io`'s long-poll loop, which makes outbound HTTPS connections to `api.vk.com` (for `groups.getLongPollServer`) and the VK-supplied poll server (for `a_check`). No firewall rules or proxy required.
 
 ---
 
@@ -134,8 +140,8 @@ If port 6060 conflicts, override via `VK_PORT`.
 | Layer         | Choice                                       | Notes                                                                                                                                                        |
 | ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Runtime       | **Bun ≥ 1.2**                                | Same as Telegram plugin prerequisite. Claude Code v2.1.80+ required for channels; v2.1.81+ for permission relay.                                             |
-| HTTP          | **ElysiaJS**                                 | Webhook receiver + local admin API on port 6060.                                                                                                             |
-| VK client     | **vk-io**                                    | Active, supports community + user tokens. Used only for the REST API surface — inbound is webhook-only.                                                      |
+| HTTP          | **ElysiaJS**                                 | Local admin + health API on `127.0.0.1:6060`. No inbound HTTP surface.                                                                                       |
+| VK client     | **vk-io**                                    | Active, supports community + user tokens. Owns both the REST API surface and the Bots Long Poll loop (`updates.start()`).                                    |
 | MCP           | **`@modelcontextprotocol/sdk`** (TypeScript) | Stdio transport. Channel capability `experimental.claude/channel`.                                                                                           |
 | State         | **JSON files**                               | Atomic writes via tmp + rename; in-process locks; `fs.watch` for hot reload on hand-edits. No SQLite.                                                        |
 | Validation    | **Elysia `t` / TypeBox**                     | One schema source for HTTP, MCP tool input, and JSON file validation on load.                                                                                |
@@ -240,17 +246,13 @@ claude-vk/
 │               │   ├── mention.ts               # @community / reply-to-bot detection
 │               │   └── mention.test.ts
 │               │
-│               ├── inbound/              # webhook receiver, normalizer, notifier
-│               │   ├── inbound.controller.ts    # Elysia plugin for /webhook/vk
+│               ├── inbound/              # long-poll loop, normalizer, notifier
+│               │   ├── long-poll.service.ts     # vk-io updates.start() + connect-backoff + message_new handler
 │               │   ├── inbound.service.ts       # pipeline: mention enrich → gate → ...
-│               │   ├── inbound.startup.ts       # wires notifier + permission-relay handler
+│               │   ├── inbound.startup.ts       # wires notifier + permission-relay handler + starts long poll
 │               │   ├── inbound.types.ts         # InboundMessage shape
-│               │   ├── webhook.schema.ts        # TypeBox for webhook envelope
-│               │   ├── webhook.service.ts      # dispatcher: confirmation / message_new / dedup
-│               │   ├── webhook.service.test.ts
-│               │   ├── webhook-adapter.ts       # VK callback payload → InboundMessage
-│               │   ├── webhook-adapter.test.ts
-│               │   ├── event-dedup.ts           # in-memory FIFO Set for event_id dedup
+│               │   ├── message-adapter.ts       # raw VK message → InboundMessage (transport-agnostic)
+│               │   ├── message-adapter.test.ts
 │               │   ├── notifier.ts              # writes <channel> blocks
 │               │   ├── attachments.ts           # download inbound attachments to inbox/<peer_id>/<cmid>/
 │               │   └── attachments.test.ts
@@ -354,23 +356,24 @@ Tools are validated with TypeBox schemas shared between MCP and the Elysia admin
 
 ## 9. Inbound flow
 
-VK delivers events via the **Callback API only**. The user fronts `127.0.0.1:6060/webhook/vk` with their own reverse proxy (Caddy, Cloudflare Tunnel, ngrok); we never bind `0.0.0.0`.
+VK delivers events via **Bots Long Poll only**. No public URL, no reverse proxy. The plugin makes outbound HTTPS connections to VK; the only firewall requirement is "allow outbound 443."
 
-### 9.1 Webhook receiver
+### 9.1 Long-poll loop
 
-- Elysia route `POST /webhook/vk` on **port 6060**, bound to `127.0.0.1`.
-- Validates the body with a TypeBox schema.
-- Returns `200 "ok"` for every code path. **Never 4xx** — VK marks the server unhealthy on any non-2xx, including secret mismatches and malformed payloads.
-- Three event types are handled:
-  - `confirmation` — returns the string from `VK_WEBHOOK_CONFIRMATION`, marks status as connected.
-  - `message_new` — dedups by `event_id` (in-memory FIFO Set, cap 10k), normalizes via the webhook adapter, dispatches into `InboundService.handle`. The HTTP response is sent before processing completes (fire-and-forget) so VK's 2s timeout is comfortable.
-  - Anything else — logged at debug and dropped.
-- **Secret mismatches** are logged and silently dropped (still returning `200 "ok"`).
-- **Dedup is in-memory only** — a process restart inside VK's retry window may occasionally double-deliver. Inbound is idempotent enough (Claude sees the same `<channel>` block twice in rare cases) that we accept the trade-off to avoid writing state on every webhook event.
+`LongPollService` wraps `vk-io`'s `updates.start()`:
+
+- On boot, `vk-io` calls `groups.getById({})` to resolve the bound community ID, then `groups.getLongPollServer({ group_id })` to obtain `{ server, key, ts }`, then begins polling `{server}?act=a_check&key={key}&ts={ts}&wait=25`.
+- The poll cursor (`ts`) and key are managed inside `vk-io` (in process memory). A "key expired" response triggers an automatic re-fetch of `getLongPollServer`.
+- We subscribe to `message_new` and dispatch into `InboundService.handle`. No event-ID dedup ring — long poll's `ts` cursor never replays events.
+- Connect failures (network down at boot, transient API errors) go through our backoff schedule: 1s → 2s → 4s → 8s → 16s → 30s, capped, retried until success or `stop()`.
+- VK API error 5 (auth) is **fatal** — we log and give up. The user must fix the token.
+- Missing `VK_TOKEN` is a no-op — long poll never starts, but the HTTP layer + `/healthz` stay alive so `/vk:configure` can still write a token.
+
+**Prerequisite — enable Bots Long Poll in the community admin.** vk.com → Manage → API usage → Long Poll API → enable, set API version to ≥ 5.199, and check `message_new`. Without this, `groups.getLongPollServer` returns no server URL and the loop sits in backoff.
 
 ### 9.2 Normalization
 
-`webhook-adapter.ts` produces an `InboundMessage` directly from the VK callback payload:
+`message-adapter.ts` produces an `InboundMessage` directly from `ctx.payload.message` (the raw snake-case VK message `vk-io` surfaces under each event context):
 
 ```ts
 interface InboundMessage {
@@ -449,11 +452,9 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
 1. **Create a community.** vk.com → Manage → Create community. Type: "Group" (works fine for both DMs and group-chat workflows).
 2. **Enable bot capabilities.** Manage → Messages → enable "Community messages." Then "Bot capabilities" → on. To use the bot in multi-user chats, also enable "Allow adding to chats."
 3. **Get an access token.** Manage → API usage → Access tokens → create with `messages`, `photos`, `docs`, `manage` scopes.
-4. **Stand up a public webhook URL.** Front `127.0.0.1:6060/webhook/vk` with Caddy, Cloudflare Tunnel, or ngrok. Set a random shared secret and the VK-supplied confirmation string in `~/.claude/channels/vk/.env`:
+4. **Enable Bots Long Poll.** Manage → API usage → Long Poll API → enable, set API version to ≥ `5.199`, and check the `message_new` event. Save `VK_TOKEN` in `~/.claude/channels/vk/.env`:
    ```
    VK_TOKEN=...
-   VK_WEBHOOK_SECRET=...               # any random string
-   VK_WEBHOOK_CONFIRMATION=...         # value VK displays in its Callback API admin
    ```
 5. **Install the plugin** (from your marketplace — see §16 on publishing):
    ```
@@ -461,27 +462,26 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
    /plugin install vk@your-marketplace
    /reload-plugins
    ```
-6. **Configure VK's Callback API.** In the community admin, set the webhook URL to your public endpoint, the secret to match `VK_WEBHOOK_SECRET`, and enable the `message_new` event.
-7. **Relaunch with the development channels flag.** Exit your session and start a new one:
+6. **Relaunch with the development channels flag.** Exit your session and start a new one:
    ```
    claude --dangerously-load-development-channels plugin:vk@your-marketplace
    ```
    Claude Code prompts for confirmation on first launch. The plugin will not connect without this flag.
-8. **Pair (DM use).** DM the community on VK; the bot replies with a 6-character pairing code. In Claude:
+7. **Pair (DM use).** DM the community on VK; the bot replies with a 6-character pairing code. In Claude:
    ```
    /vk:access pair <code>
    ```
    This adds the DM peer to `access.json → chats` with the sender's `user_id` in its sender allowlist.
-9. **Pair (group chat use, optional).** Add the bot to a VK group chat. From inside the chat, type `@<community_screen_name> pair` — the bot replies with a 6-character code. In Claude:
+8. **Pair (group chat use, optional).** Add the bot to a VK group chat. From inside the chat, type `@<community_screen_name> pair` — the bot replies with a 6-character code. In Claude:
    ```
    /vk:access pair <code>
    ```
    Adds the chat's `peer_id` to `access.json → chats` and the _inviting user's_ `user_id` to that chat's sender allowlist. Add more allowed senders later with `/vk:access add-sender <peer_id> <user_id>`.
-10. **Lock it down.**
-    ```
-    /vk:access policy dm allowlist
-    /vk:access policy group_chat allowlist
-    ```
+9. **Lock it down.**
+   ```
+   /vk:access policy dm allowlist
+   /vk:access policy group_chat allowlist
+   ```
 
 The community ID and screen name are auto-resolved at startup from `groups.getById` — no configuration step required.
 
@@ -577,7 +577,7 @@ All commands hit `http://127.0.0.1:6060/admin/*`, so they work even from within 
 
 Persistent state is **two JSON files**. Both are written atomically (write-to-tmp + rename), serialized through an in-process write chain, and validated against TypeBox schemas on load and update. A malformed write is rejected and the previous in-memory version stays live.
 
-- **`~/.claude/channels/vk/.env`** (`0600`) — `VK_TOKEN`, `VK_WEBHOOK_SECRET`, `VK_WEBHOOK_CONFIRMATION`, optional `VK_PORT` / `VK_HTTP_BIND` / `LOG_LEVEL` / `NODE_ENV`. Read once at startup; shell env overrides.
+- **`~/.claude/channels/vk/.env`** (`0600`) — `VK_TOKEN`, optional `VK_PORT` / `LOG_LEVEL` / `NODE_ENV`. Read once at startup; shell env overrides.
 - **`~/.claude/channels/vk/access.json`** (`0600`) — policies, chats, senders, mention policies, pending pair codes (schema in §11.2). Hot-reloaded via `fs.watch`.
 - **`~/.claude/channels/vk/peers.json`** (`0644`) — resolved VK user/group metadata cache, TTL 1h. Safe to delete; rebuilds on demand.
 - **`~/.claude/channels/vk/inbox/`** (dir) — downloaded attachments, grouped by `<peer_id>/<cmid>/`.
@@ -585,7 +585,7 @@ Persistent state is **two JSON files**. Both are written atomically (write-to-tm
 
 The state directory path is fixed (`~/.claude/channels/vk`); there is no `VK_STATE_DIR` override.
 
-**In-memory state.** Two transient slices live in process memory only — `RecentSentMessages` (cap-200 ring of outbound `(peer_id, cmid)` for reply-to-bot detection) and `EventIdDedup` (cap-10k FIFO Set of webhook `event_id`s). Both reset on restart. The trade-off is accepted: VK's retry window is short, and inbound is idempotent enough that a rare double-deliver during a restart manifests as Claude seeing the same `<channel>` block twice.
+**In-memory state.** Two transient slices live in process memory only — `RecentSentMessages` (cap-200 ring of outbound `(peer_id, cmid)` for reply-to-bot detection) and `vk-io`'s long-poll cursor (`ts` + key). Both reset on restart. A restart loses any unread `ts` window; long poll re-fetches a fresh server on `getLongPollServer` and resumes from VK's current position, so brief gaps are possible but rare.
 
 **Why JSON over SQLite.** Smaller dependency surface, no migrations, transparent to users editing by hand or grep-ing for a value, trivially version-controllable for backup. The cost is read performance on the peers cache, which we mitigate with an in-process cache; at the volumes a single-user VK community sees, this is comfortably below any threshold where SQLite would pay back its complexity.
 
@@ -595,10 +595,11 @@ The state directory path is fixed (`~/.claude/channels/vk`); there is no `VK_STA
 
 ## 14. Error handling & rate limits
 
-- Group token: 20 req/sec — enforce via a token-bucket limiter in `vk/client.ts`. Burst 20, refill 20/s.
+- Group token: 20 req/sec — enforce via a token-bucket limiter in `vk/client.ts`. Burst 20, refill 20/s. Note: long-poll `a_check` requests do **not** go through this limiter — they hit a dedicated poll server, not `api.vk.com`, and aren't subject to the 20 req/sec quota.
 - VK returns `error_code: 6` (Too many requests) — back off 250ms × attempt, max 5 retries.
 - `error_code: 9` (Flood control) on `messages.send` to new peers — return the error to Claude rather than retrying; pairing UX should make this rare.
-- Webhook handler **always** returns `200 "ok"`. Malformed payloads, secret mismatches, and unknown event types are logged and dropped — never 4xx (VK marks the endpoint unhealthy on any non-2xx).
+- VK returns `error_code: 5` (auth) during long-poll start — fatal; we log and abort the loop. The user fixes the token, then `/vk:configure` writes a new one and a restart picks it up.
+- Long-poll connect failures (network, transient API errors) retry with backoff: 1s → 2s → 4s → 8s → 16s → 30s, capped, until success or `stop()`. Key-expired during a running poll is handled transparently by `vk-io`.
 - Tool calls that fail return structured errors `{ ok: false, code, message }` so Claude can decide whether to retry or ask the user.
 
 ---
@@ -640,8 +641,8 @@ The inbound message handler watches every incoming message for the verdict regex
 
 - Token never leaves the local machine. Logged values are redacted by Pino.
 - `.env` and `access.json` are mode `0600`. `peers.json` is `0644` (no secrets).
-- Webhook endpoint validates `VK_WEBHOOK_SECRET` if set; mismatches are logged and silently dropped (still returning `200 "ok"` so VK doesn't mark the endpoint unhealthy).
-- HTTP listener (port **6060**) bound to `127.0.0.1` only — never exposed unless the user explicitly sets `VK_HTTP_BIND` and accepts the warning.
+- No inbound HTTP — long poll makes outbound HTTPS only, so there is no public attack surface to harden.
+- HTTP listener (port **6060**) is **hard-bound to `127.0.0.1`** for admin + health only. No env override.
 - Pairing codes are 6 chars from a 32-char alphabet (excludes `0/O/1/I/l`), single-use, TTL 10 min.
 - Attachments downloaded only from VK CDN domains (allowlisted by host).
 - Permission relay (§15) refuses verdicts from group chats and from users who didn't originate the request.
@@ -656,9 +657,9 @@ The inbound message handler watches every incoming message for the verdict regex
 | Message history       | Not available — bot only sees live messages. | **Available** via `get_conversation_history`.                                                 |
 | Search                | Not available.                               | **Available** via `search_messages`.                                                          |
 | Reactions             | Fixed whitelist.                             | Enumerated set, fetched from VK at startup; passed to Claude as part of the tool description. |
-| Transport             | Bot API (long polling).                      | **Callback API only** (webhook + user-managed reverse proxy).                                 |
-| Setup                 | BotFather + token.                           | Community + token + public webhook URL.                                                       |
-| HTTP layer            | None needed.                                 | **ElysiaJS** on `127.0.0.1:6060` for webhook + admin.                                         |
+| Transport             | Bot API (long polling).                      | **Bots Long Poll only** (outbound HTTPS, no public URL).                                      |
+| Setup                 | BotFather + token.                           | Community + token + enable Long Poll in admin panel.                                          |
+| HTTP layer            | None needed.                                 | **ElysiaJS** on `127.0.0.1:6060` for admin + health (no inbound HTTP).                        |
 | Peer IDs              | `chat_id` is a single int.                   | `peer_id` splits user (<2e9) vs group chat (≥2e9).                                            |
 | Group chats           | Deferred to `ACCESS.md`.                     | **Supported in v1** with two-layer access and mention-detection.                              |
 | State store           | `.env` + access.json.                        | `.env` + `access.json` + `peers.json` cache. No SQLite.                                       |
@@ -675,11 +676,11 @@ To eventually launch with the unprefixed `--channels` flag, the plugin needs to 
 
 - ✅ **M0 — Skeleton.** `.claude-plugin/plugin.json`, `.mcp.json`, Bun project, Elysia hello-world on port 6060, MCP server declaring `experimental.claude/channel: {}` and exposing a single `ping` tool. End-to-end: `claude --dangerously-load-development-channels plugin:vk@your-marketplace` lights up and `<channel>` events flow.
 - ✅ **M1 — Outbound.** `send_message`, `edit_message`, `delete_message`. Manual peer ID. Token bucket limiter. JSON store skeleton.
-- ✅ **M2 — Inbound + DM.** Webhook controller, normalizer, notifier writing `<channel>` blocks, attachment download. DM-only access gate.
+- ✅ **M2 — Inbound + DM.** Long-poll loop, normalizer, notifier writing `<channel>` blocks, attachment download. DM-only access gate.
 - ✅ **M3 — Access + JSON store.** Pairing flow, two-layer allowlist, `/vk:access` commands, hot reload on file change, atomic writes.
 - ✅ **M4 — Group chats.** `is_group_chat` detection, mention-detection, per-chat sender allowlist, `mention_policy`, group-chat pairing UX.
 - ✅ **M5 — Rich tools.** `react`, `mark_read`, `get_conversation_history`, `search_messages`, `get_user_info`, `upload_attachment`.
-- ✅ **M6 — Callback API (now default).** Elysia `/webhook/vk` route, confirmation handshake, event-ID dedup, secret validation. Long Poll removed; callback is the only transport.
+- ✅ **M6 — Transport iteration.** Briefly swapped to Callback API for public-IP deploys, then reverted to Bots Long Poll as the sole transport — no public URL needed, simpler for the local-first install. `webhook.*`, `event-dedup`, and `inbound.controller` deleted.
 - ✅ **M7 — Permission relay.** `claude/channel/permission` capability, request handler, verdict regex in inbound, originating-user check, DM-only constraint. Always on.
 - 🚧 **M8 — Polish.** `README.md`, `ACCESS.md`, `/vk:status`, error UX, log rotation, Bun test suite for tools + access gate, allowlist-submission packaging.
 - **v1 release.** All above.
@@ -693,7 +694,6 @@ To eventually launch with the unprefixed `--channels` flag, the plugin needs to 
 3. **Keyboards.** VK has inline keyboards (richer than Telegram's). Worth exposing as a first-class param to `send_message`, or leave as a raw JSON pass-through? _Recommendation: raw pass-through in v1, typed schema in v2._
 4. **Voice messages.** VK voice messages decode to OGG/Opus. Transcribe locally via `whisper-cli`, or pass the raw file? _Recommendation: pass raw, document the optional whisper hook in `SKILL.md`._
 5. **Peers cache growth.** `peers.json` could grow unbounded over months in a large community. _Recommendation: enforce 10k-entry LRU eviction; warn at 8k. Shipped._
-6. **Webhook secret rotation.** Rotating `VK_WEBHOOK_SECRET` requires a restart today. _Recommendation: keep as-is — rotations are rare and a restart is cheap._
 
 ---
 
@@ -703,7 +703,7 @@ To eventually launch with the unprefixed `--channels` flag, the plugin needs to 
 - Anything that requires VK's "official app" permissions (call logs, profile edits, money transfers).
 - A web admin UI in v1. Slash commands are the admin surface.
 - Translation/i18n of the bot's own auto-replies. v1 ships English-only; non-English copy can be added when there's demand.
-- VK Long Poll. The plugin is callback-only — users must front the webhook with a reverse proxy.
+- VK Callback API / webhooks. The plugin is long-poll-only — there is no inbound HTTP route.
 - Multiple plugin instances on one machine. The state directory is fixed at `~/.claude/channels/vk`.
 
 ---

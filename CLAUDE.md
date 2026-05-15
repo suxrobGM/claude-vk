@@ -2,9 +2,9 @@
 
 ## What this is
 
-`claude-vk` is a Claude Code **channel plugin** bridging VK.com (DMs + group chats) into a session. Single Bun process: MCP stdio server + ElysiaJS on `127.0.0.1:6060`. MCP capabilities: `experimental.claude/channel` + `claude/channel/permission` (always on).
+`claude-vk` is a Claude Code **channel plugin** bridging VK.com (DMs + group chats) into a session. Single Bun process: MCP stdio server + ElysiaJS on `127.0.0.1:6060` (admin + health only — no inbound HTTP). MCP capabilities: `experimental.claude/channel` + `claude/channel/permission` (always on).
 
-Inbound transport is **VK Callback API only** — the user fronts `127.0.0.1:6060/webhook/vk` with their own reverse proxy (Caddy / Cloudflare Tunnel / ngrok).
+Inbound transport is **VK Bots Long Poll only** — no public URL, no reverse proxy. `vk-io`'s `updates.start()` owns the poll cursor (`ts`), retries, and key-expired refresh; we wrap it with a connect-backoff loop and a `message_new` handler.
 
 PRD: [docs/prd.md](docs/prd.md) — source of truth. M0–M7 shipped; M8 polish in progress.
 
@@ -39,7 +39,7 @@ Tool handlers **never throw to MCP** — `VkApiError`/`PluginError` collapse to 
 
 **Config.** [env.ts](apps/plugin/src/env.ts) merges `~/.claude/channels/vk/.env` under `process.env`; [config.ts](apps/plugin/src/config.ts) exposes `current()`. `current()` validates once on first call (writes defaults back to `process.env`) and rebuilds a fresh snapshot from `process.env` on every subsequent call — call at use-time, never capture.
 
-The user only configures **`VK_TOKEN`**, optional **`VK_WEBHOOK_SECRET`** / **`VK_WEBHOOK_CONFIRMATION`**, and optional **`VK_PORT`** / **`VK_HTTP_BIND`** / **`LOG_LEVEL`**. The bound community's `id` and `screen_name` are auto-resolved at startup via `groups.getById` and cached in [`CommunityResolver`](apps/plugin/src/modules/access/community-resolver.ts) — no env override.
+The user only configures **`VK_TOKEN`** and optionally **`VK_PORT`** / **`LOG_LEVEL`**. The HTTP listener is hard-bound to `127.0.0.1` — there is no inbound HTTP surface, so no public-exposure knob. The bound community's `id` and `screen_name` are auto-resolved at startup via `groups.getById` and cached in [`CommunityResolver`](apps/plugin/src/modules/access/community-resolver.ts) — no env override.
 
 **State (JSON, never SQLite).** [state/json-store.ts](apps/plugin/src/state/json-store.ts) is the generic store: atomic tmp+rename writes, in-memory cache, serialized writes, TypeBox validation on load + update. Bad writes are rejected; previous version stays live. Schemas live with the module that owns the file.
 
@@ -48,13 +48,13 @@ Two persistent files only — both under `~/.claude/channels/vk/` (path fixed at
 - `access.json` — policies, chats, senders, mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
 - `peers.json` — VK user/group metadata cache (TTL 1h, LRU 10k).
 
-No `state.json` — the long-poll cursor (gone), webhook event-ID dedup, and recent-sent-cmid ring all live in process memory (`EventIdDedup`, `RecentSentMessages`). A restart loses the dedup window, which is acceptable since VK's retry window is short and inbound is idempotent enough.
+No `state.json`. The long-poll cursor is owned by `vk-io` (in-memory; a restart starts from VK's current `ts` and may briefly miss in-flight events, which is acceptable), and the recent-sent-cmid ring (`RecentSentMessages`) lives in process memory too.
 
 **Access + mention.** Three-layer gate in [access/access.gate.ts](apps/plugin/src/modules/access/access.gate.ts): chat allowlist → per-chat senders → mention-policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). Mention signals in [access/mention.ts](apps/plugin/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved). `isPairCommand` requires explicit `@<community> pair` — group chats never auto-emit codes.
 
 Policies: DM and group chat each take `pairing` (default) or `allowlist`. No `open` policy.
 
-**Inbound.** [inbound/webhook.service.ts](apps/plugin/src/modules/inbound/webhook.service.ts) receives `POST /webhook/vk`, dedups by `event_id` via [`EventIdDedup`](apps/plugin/src/modules/inbound/event-dedup.ts), converts via [`webhookMessageNewToInbound`](apps/plugin/src/modules/inbound/webhook-adapter.ts), and dispatches into [`InboundService.handle`](apps/plugin/src/modules/inbound/inbound.service.ts). The webhook returns `200 "ok"` immediately (PRD §9.2 — VK marks the endpoint unhealthy on any non-2xx); processing is fire-and-forget. Pipeline: `mention enrich → gate → (drop | pair | permission verdict | download + notify)`. Never throws — every failure is logged and the controller's 200 is preserved. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
+**Inbound.** [inbound/long-poll.service.ts](apps/plugin/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` — auto-resolves the bound group ID, owns the poll cursor + key-expired refresh. We layer on a connect-backoff loop (1s→30s, code 5 fatal) and a `message_new` handler that converts via [`vkMessageToInbound`](apps/plugin/src/modules/inbound/message-adapter.ts) and dispatches into [`InboundService.handle`](apps/plugin/src/modules/inbound/inbound.service.ts). Pipeline: `mention enrich → gate → (drop | pair | permission verdict | download + notify)`. Never throws — every failure is logged and the poll loop continues. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
 
 **Peer IDs.** `peer_id ≥ 2_000_000_000` = group chat. Use `isGroupChat()` from [common/utils/peer.ts](apps/plugin/src/common/utils/peer.ts).
 

@@ -2,25 +2,21 @@ import { isGroupChat } from "@/common/utils/peer";
 import type { Attachment, InboundMessage } from "./inbound.types";
 
 /**
- * VK Callback API `message_new` object shape. Mirrors only the fields we
- * consume — snake_case throughout. Translates straight to `InboundMessage`
- * (no transport-agnostic intermediate shape since Long Poll is gone).
+ * Raw VK `message_new` payload — the shape `vk-io` surfaces under
+ * `ctx.payload.message` for each long-poll event. Snake_case, only the
+ * fields we consume.
  */
-export interface VkCallbackMessageNewObject {
-  message?: VkCallbackMessage;
-}
-
-export interface VkCallbackMessage {
+export interface VkMessage {
   id?: number;
   peer_id?: number;
   from_id?: number;
   conversation_message_id?: number;
   text?: string;
-  attachments?: VkCallbackAttachment[];
+  attachments?: VkMessageAttachment[];
   reply_message?: { conversation_message_id?: number; id?: number };
 }
 
-export interface VkCallbackAttachment {
+export interface VkMessageAttachment {
   type: string;
   photo?: { sizes?: Array<{ url?: string; width?: number; height?: number }> };
   audio_message?: { link_ogg?: string; link_mp3?: string };
@@ -34,26 +30,26 @@ interface PhotoSize {
 }
 
 /**
- * Translate a VK Callback API `message_new.object` payload into our
- * normalized `InboundMessage`. Pure — no I/O, no DI. Tolerates partial
- * payloads: missing peer_id / from_id default to 0 so the downstream gate
- * drops the message rather than crashing. `mentioned_bot` / `is_reply_to_bot`
- * are initialized to false and later enriched by `MentionDetector`.
+ * Translate a raw VK `message_new` message payload into our normalized
+ * `InboundMessage`. Pure — no I/O, no DI. Tolerates partial payloads: missing
+ * peer_id / from_id default to 0 so the downstream gate drops the message
+ * rather than crashing. `mentioned_bot` / `is_reply_to_bot` are initialized to
+ * false and later enriched by `MentionDetector`.
  */
-export function webhookMessageNewToInbound(object: VkCallbackMessageNewObject): InboundMessage {
-  const m = object.message ?? {};
-  const messageId = m.conversation_message_id ?? m.id ?? 0;
-  const replyCmid = m.reply_message?.conversation_message_id ?? m.reply_message?.id;
-  const attachments: Attachment[] = (m.attachments ?? []).map((a) => ({
+export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
+  const msg = m ?? {};
+  const messageId = msg.conversation_message_id ?? msg.id ?? 0;
+  const replyCmid = msg.reply_message?.conversation_message_id ?? msg.reply_message?.id;
+  const attachments: Attachment[] = (msg.attachments ?? []).map((a) => ({
     type: a.type,
     url: pickAttachmentUrl(a),
   }));
-  const peerId = m.peer_id ?? 0;
+  const peerId = msg.peer_id ?? 0;
   return {
     peer_id: peerId,
-    from_id: m.from_id ?? 0,
+    from_id: msg.from_id ?? 0,
     conversation_message_id: messageId,
-    text: m.text ?? "",
+    text: msg.text ?? "",
     attachments,
     reply_to: replyCmid,
     is_group_chat: isGroupChat(peerId),
@@ -63,7 +59,7 @@ export function webhookMessageNewToInbound(object: VkCallbackMessageNewObject): 
   };
 }
 
-function pickAttachmentUrl(a: VkCallbackAttachment): string | undefined {
+function pickAttachmentUrl(a: VkMessageAttachment): string | undefined {
   if (a.type === "photo" && a.photo?.sizes?.length) {
     return pickLargestPhotoUrl(a.photo.sizes);
   }

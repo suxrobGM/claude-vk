@@ -16,19 +16,16 @@ export class AdminService {
     private readonly community: CommunityResolver,
   ) {}
 
-  /** Effective config with `vk_token`/`webhook_secret` collapsed to "***" when set. */
+  /** Effective config with `vk_token` collapsed to "***" when set. */
   getConfig(): ConfigResponse {
     const c = currentConfig();
     const identity = this.community.get();
     return {
       port: c.port,
-      http_bind: c.httpBind,
       state_dir: stateDir,
       vk_community_id: identity?.id ?? null,
       vk_community_screen_name: identity?.screen_name ?? null,
       vk_token: c.vkToken ? "***" : null,
-      webhook_secret: c.webhookSecret ? "***" : null,
-      webhook_confirmation: c.webhookConfirmation ? "***" : null,
     };
   }
 
