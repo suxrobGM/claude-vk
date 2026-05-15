@@ -20,8 +20,9 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
 3. **Install the plugin** from this marketplace:
 
    ```text
-   /plugin marketplace add github:suxrobgm/claude-vk
+   /plugin marketplace add https://github.com/suxrobGM/claude-vk
    /plugin install vk@claude-vk
+   /reload-plugins
    ```
 
 4. **Save the token.**
@@ -95,25 +96,6 @@ Full tool reference: [docs/tools.md](docs/tools.md).
 - [Access control](docs/access.md)
 - [MCP tool reference](docs/tools.md)
 - [Troubleshooting](docs/troubleshooting.md)
-
-## Local development
-
-Contributors clone; end users install via the marketplace.
-
-```bash
-git clone https://github.com/suxrobgm/claude-vk
-cd claude-vk
-bun install
-bun run dev
-```
-
-Load the local checkout via [.mcp.json](.mcp.json), no marketplace needed. From inside the cloned repo:
-
-```bash
-claude --dangerously-load-development-channels server:vk --plugin-dir ./
-```
-
-Restart the session after editing `apps/plugin/src/`. `access.json` and `.env` hot-reload.
 
 ## License
 
