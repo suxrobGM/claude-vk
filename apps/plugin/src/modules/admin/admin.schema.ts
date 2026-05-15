@@ -13,6 +13,7 @@ export const ConfigResponseSchema = t.Object({
   vk_community_screen_name: NullableString,
   vk_token: NullableString,
   webhook_secret: NullableString,
+  webhook_confirmation: NullableString,
 });
 
 /** Process-runtime status, merging in-process state with persisted long-poll cursor. */

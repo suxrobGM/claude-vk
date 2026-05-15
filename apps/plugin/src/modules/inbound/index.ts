@@ -4,3 +4,7 @@ export * from "./notifier";
 export * from "./attachments";
 export * from "./inbound.service";
 export * from "./inbound.startup";
+export * from "./inbound.controller";
+export * from "./webhook-adapter";
+export * from "./webhook.schema";
+export * from "./webhook.service";

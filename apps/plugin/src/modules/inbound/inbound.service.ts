@@ -1,8 +1,10 @@
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
+import { current as currentConfig } from "@/config";
 import { AccessGate } from "@/modules/access/access.gate";
 import { isPairCommand, MentionDetector } from "@/modules/access/mention";
 import { PairingService } from "@/modules/access/pairing";
+import { PermissionRelayService } from "@/modules/permission-relay/permission-relay.service";
 import { UsersCache } from "@/modules/users/users.cache";
 import { AttachmentService } from "./attachments";
 import type { ChannelNotifier } from "./notifier";
@@ -24,6 +26,7 @@ export class InboundService {
     private readonly attachments: AttachmentService,
     private readonly users: UsersCache,
     private readonly mentions: MentionDetector,
+    private readonly permissionRelay: PermissionRelayService,
   ) {}
 
   /** Wires the live channel notifier; called once from `inbound.startup`. */
@@ -55,6 +58,12 @@ export class InboundService {
         return;
       }
 
+      // Verdict short-circuit: AFTER gate (so we trust from_id), BEFORE notify
+      // (so verdict text never becomes a <channel> block for Claude — PRD §15.1).
+      if (currentConfig().permissionRelay) {
+        if (await this.permissionRelay.tryResolveVerdict(msg)) return;
+      }
+
       const withFiles = await this.attachments.downloadAll(
         msg.attachments,
         msg.peer_id,
@@ -67,6 +76,12 @@ export class InboundService {
         return;
       }
       await notifier.notify({ ...msg, attachments: withFiles }, name);
+
+      // Record the DM activator so an incoming permission_request knows where
+      // to send the prompt. Group chats are explicitly excluded by PRD §15.2.
+      if (currentConfig().permissionRelay && !msg.is_group_chat) {
+        this.permissionRelay.recordLastDmActivator(msg.peer_id, msg.from_id);
+      }
     } catch (err) {
       logger.error({ err }, "inbound handler crashed; transport continues");
     }

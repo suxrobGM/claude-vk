@@ -8,19 +8,24 @@ import { startMcpServer } from "@/mcp/server";
 import { accessController } from "@/modules/access";
 import { adminController } from "@/modules/admin";
 import { healthController } from "@/modules/health";
-import { startInbound } from "@/modules/inbound";
+import { inboundController, startInbound } from "@/modules/inbound";
 
 bootstrapContainer();
 const mcp = await startMcpServer();
 await startInbound(mcp);
 
 const c = currentConfig();
-new Elysia()
+const app = new Elysia()
   .use(errorMiddleware)
   .use(swaggerPlugin)
   .use(healthController)
   .use(adminController)
-  .use(accessController)
-  .listen({ port: c.port, hostname: c.httpBind }, ({ hostname, port }) => {
-    logger.info({ hostname, port }, "elysia listening");
-  });
+  .use(accessController);
+
+if (c.transport === "callback") {
+  app.use(inboundController);
+}
+
+app.listen({ port: c.port, hostname: c.httpBind }, ({ hostname, port }) => {
+  logger.info({ hostname, port }, "elysia listening");
+});

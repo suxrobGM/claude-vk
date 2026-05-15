@@ -6,11 +6,12 @@ export interface Config {
   transport: "longpoll" | "callback";
   locale: string;
   permissionRelay: boolean;
-  stateDir: string | undefined;
-  vkToken: string | undefined;
-  vkCommunityId: string | undefined;
-  vkCommunityScreenName: string | undefined;
-  webhookSecret: string | undefined;
+  stateDir?: string;
+  vkToken?: string;
+  vkCommunityId?: string;
+  vkCommunityScreenName?: string;
+  webhookSecret?: string;
+  webhookConfirmation?: string;
 }
 
 function build(): Config {
@@ -26,6 +27,7 @@ function build(): Config {
     vkCommunityId: process.env.VK_COMMUNITY_ID,
     vkCommunityScreenName: process.env.VK_COMMUNITY_SCREEN_NAME,
     webhookSecret: process.env.VK_WEBHOOK_SECRET,
+    webhookConfirmation: process.env.VK_WEBHOOK_CONFIRMATION,
   };
 }
 

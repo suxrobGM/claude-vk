@@ -27,6 +27,7 @@ export class AdminService {
       vk_community_screen_name: c.vkCommunityScreenName ?? null,
       vk_token: c.vkToken ? "***" : null,
       webhook_secret: c.webhookSecret ? "***" : null,
+      webhook_confirmation: c.webhookConfirmation ? "***" : null,
     };
   }
 

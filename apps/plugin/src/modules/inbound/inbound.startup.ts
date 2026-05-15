@@ -1,6 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { container } from "@/common/di";
+import { logger } from "@/common/logger";
+import { StatusRegistry } from "@/common/status";
+import { current as currentConfig } from "@/config";
 import { AccessStore } from "@/modules/access/access.store";
+import { startPermissionRelay } from "@/modules/permission-relay/permission-relay.startup";
 import { UsersCache } from "@/modules/users/users.cache";
 import { StateStore } from "@/state/state.store";
 import { VkLongPoll } from "@/vk/long-poll";
@@ -9,8 +13,9 @@ import { ChannelNotifier } from "./notifier";
 
 /**
  * Boots stores, wires the channel notifier with the live MCP handle, and
- * starts the long-poll loop. Called once from `app.ts` after the MCP
- * stdio transport has connected.
+ * starts the inbound transport. Called once from `app.ts` after the MCP
+ * stdio transport has connected. In `callback` mode no transport boots
+ * here — the Elysia controller drives `InboundService.handle` directly.
  */
 export async function startInbound(mcp: McpServer): Promise<void> {
   await container.resolve(StateStore).init();
@@ -18,7 +23,15 @@ export async function startInbound(mcp: McpServer): Promise<void> {
   await container.resolve(UsersCache).init();
 
   const service = container.resolve(InboundService);
-  service.setNotifier(new ChannelNotifier(mcp));
+  const notifier = new ChannelNotifier(mcp);
+  service.setNotifier(notifier);
+  startPermissionRelay(mcp, notifier);
+
+  if (currentConfig().transport === "callback") {
+    container.resolve(StatusRegistry).setTransport("callback");
+    logger.info("transport=callback; long-poll skipped, webhook controller mounted by app.ts");
+    return;
+  }
 
   const longPoll = container.resolve(VkLongPoll);
   await longPoll.start((raw) => service.handle(raw));

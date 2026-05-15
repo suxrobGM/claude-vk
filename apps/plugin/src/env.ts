@@ -14,6 +14,7 @@ const EnvSchema = t.Object({
   VK_PORT: t.Optional(t.String({ default: "6060", pattern: "^[0-9]+$" })),
   VK_HTTP_BIND: t.Optional(t.String({ default: "127.0.0.1" })),
   VK_WEBHOOK_SECRET: t.Optional(t.String()),
+  VK_WEBHOOK_CONFIRMATION: t.Optional(t.String({ minLength: 1 })),
   VK_LOCALE: t.Optional(t.String({ default: "en" })),
   VK_PERMISSION_RELAY: t.Optional(
     t.Union([t.Literal("true"), t.Literal("false")], { default: "false" }),
