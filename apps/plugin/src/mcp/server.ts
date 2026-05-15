@@ -6,14 +6,18 @@ import { registerAllTools } from "./register-tools";
 
 let ready = false;
 
-export function isReady(): boolean {
+/** True once the MCP stdio transport has connected. */
+export function isMcpReady(): boolean {
   return ready;
 }
 
+/** Back-compat alias. */
+export const isReady = isMcpReady;
+
 /**
- * Boots the MCP stdio server. The DI container must be bootstrapped (see
- * `bootstrapContainer`) before this runs — every module's `register()` resolves
- * its dependencies through the same container.
+ * Boots the MCP stdio server. The DI container must be bootstrapped first;
+ * each module resolves its dependencies through the same container when
+ * `registerAllTools` runs.
  */
 export async function startMcpServer(): Promise<McpServer> {
   const server = new McpServer(
@@ -21,9 +25,13 @@ export async function startMcpServer(): Promise<McpServer> {
     {
       capabilities: buildCapabilities(),
       instructions:
-        "VK channel plugin. Outbound tools (send_message, edit_message, " +
-        "delete_message) are available now. Inbound <channel> events from VK " +
-        "land in M2. Use the `ping` tool to verify connectivity without a token.",
+        'VK channel plugin. Messages arrive as <channel source="vk" peer_id="…" ' +
+        'from_id="…" from_name="…" is_group_chat="…" conversation_message_id="…" ' +
+        'mentioned="…"> blocks. Reply with the send_message tool, passing peer_id ' +
+        "from the tag. Use edit_message / delete_message for prior messages " +
+        '(24h window, own messages only). In group chats with mentioned="false", ' +
+        "do not reply unless the user explicitly asks you to. Use the `ping` " +
+        "tool to verify connectivity without a token.",
     },
   );
 

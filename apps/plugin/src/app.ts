@@ -1,35 +1,26 @@
-import { swagger } from "@elysiajs/swagger";
 import { Elysia } from "elysia";
 import { bootstrapContainer } from "@/common/di";
 import { logger } from "@/common/logger";
+import { errorMiddleware } from "@/common/middleware";
+import { swaggerPlugin } from "@/common/plugins";
 import { current as currentConfig } from "@/config";
 import { startMcpServer } from "@/mcp/server";
+import { accessController } from "@/modules/access";
+import { adminController } from "@/modules/admin";
 import { healthController } from "@/modules/health";
+import { startInbound } from "@/modules/inbound";
 
 bootstrapContainer();
-await startMcpServer();
+const mcp = await startMcpServer();
+await startInbound(mcp);
 
 const c = currentConfig();
 new Elysia()
-  .use(
-    swagger({
-      path: "/docs",
-      documentation: {
-        info: {
-          title: "claude-vk admin API",
-          version: "0.1.0",
-          description:
-            "Local-only HTTP surface for the VK channel plugin. Health probes, webhook receiver " +
-            "(when transport=callback), and admin endpoints consumed by the /vk:* skills.",
-        },
-        tags: [
-          { name: "Health", description: "Liveness and readiness probes." },
-          { name: "Admin", description: "Cross-cutting admin endpoints (M3+)." },
-        ],
-      },
-    }),
-  )
+  .use(errorMiddleware)
+  .use(swaggerPlugin)
   .use(healthController)
+  .use(adminController)
+  .use(accessController)
   .listen({ port: c.port, hostname: c.httpBind }, ({ hostname, port }) => {
     logger.info({ hostname, port }, "elysia listening");
   });

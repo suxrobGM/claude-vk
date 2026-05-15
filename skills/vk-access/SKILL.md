@@ -3,20 +3,105 @@ name: vk-access
 description: Manage VK channel access — pair new chats, edit allowlists, set policy. Use when the user wants to pair, approve a sender, list allowed chats, or change policy for the VK channel.
 user-invocable: true
 allowed-tools:
+  - Bash(curl http://127.0.0.1:6060/admin/access/*)
   - Read
-  - Write
 ---
 
-# /vk:access — VK Channel Access Control (M0 placeholder)
+# /vk:access — VK Channel Access Control
 
-Manages `~/.claude/channels/vk/access.json`. **Not yet implemented in M0.**
+Calls the local admin API at `http://127.0.0.1:6060/admin/access/*` to manage
+who is allowed to reach the VK channel. The plugin's gate drops everything
+that isn't on this allowlist (unless the policy is `pairing`, in which case
+unknown DMs get a 6-character code that this skill consumes).
 
-Lands in **M3** (DM pairing + allowlist) and **M4** (group chats + per-chat
-sender allowlist + mention policy). See `docs/PRD-vk-plugin.md` §11 for the
-final schema.
+Arguments: `$ARGUMENTS` — the first token is the sub-action, the rest are
+sub-action arguments. Group-chat-specific sub-actions (mention-policy) land
+in M4.
 
-For M0, this skill should report:
+---
 
-> The VK channel is in M0 (skeleton). Access control arrives in M3. Until then
-> the plugin does not forward inbound messages — it only exposes the `ping`
-> MCP tool.
+## Sub-actions
+
+### `pair <code>`
+
+Consume a pairing code that the bot DM'd. On success the originating peer is
+added to `access.json → chats`.
+
+```bash
+curl -s -X POST http://127.0.0.1:6060/admin/access/pairings \
+  -H 'content-type: application/json' \
+  -d '{"code":"<CODE>"}'
+```
+
+### `list` and `list <peer_id>`
+
+```bash
+# all allowed chats
+curl -s http://127.0.0.1:6060/admin/access/chats
+
+# one chat with its senders
+curl -s http://127.0.0.1:6060/admin/access/chats/<peer_id>
+```
+
+### `policy <peer_type> <policy>`
+
+`peer_type` is `dm` or `group_chat`; `policy` is `pairing`, `allowlist`, or
+(DMs only) `open`.
+
+```bash
+curl -s -X PUT http://127.0.0.1:6060/admin/access/policies/<peer_type> \
+  -H 'content-type: application/json' \
+  -d '{"policy":"<policy>"}'
+```
+
+### `add-sender <peer_id> <user_id|@screen_name>`
+
+Either a numeric VK user id or an `@screen_name` works; the plugin resolves
+screen names via `users.get`.
+
+```bash
+# numeric
+curl -s -X POST http://127.0.0.1:6060/admin/access/chats/<peer_id>/senders \
+  -H 'content-type: application/json' \
+  -d '{"user_id":123456}'
+
+# screen name
+curl -s -X POST http://127.0.0.1:6060/admin/access/chats/<peer_id>/senders \
+  -H 'content-type: application/json' \
+  -d '{"screen_name":"vasiliy"}'
+```
+
+### `remove-sender <peer_id> <user_id>`
+
+```bash
+curl -s -X DELETE http://127.0.0.1:6060/admin/access/chats/<peer_id>/senders/<user_id>
+```
+
+### `remove-chat <peer_id>`
+
+```bash
+curl -s -X DELETE http://127.0.0.1:6060/admin/access/chats/<peer_id>
+```
+
+### `pending`
+
+Outstanding pairing codes (peer + expiry).
+
+```bash
+curl -s http://127.0.0.1:6060/admin/access/pairings
+```
+
+### `mention-policy <peer_id> <mention_only|all|reply_only>`
+
+Group-chat activation policy. **Not implemented in this milestone** —
+returns a clear "group chats land in M4" message.
+
+---
+
+## Notes
+
+- Hand-editing `~/.claude/channels/vk/access.json` works too — the server
+  watches the file and hot-reloads valid edits. Malformed edits are rejected
+  and the previous version stays live.
+- All endpoints validate input. Errors come back as `{ "error": "..." }`
+  with a 4xx status; successful mutations return `{ "ok": true, ... }`.

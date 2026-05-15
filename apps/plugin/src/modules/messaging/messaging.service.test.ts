@@ -7,6 +7,8 @@ import type {
   EditMessageParams,
   SendMessageParams,
   SendMessageResponse,
+  UsersGetParams,
+  UsersGetResponseEntry,
 } from "@/vk/client";
 import { MessagingService } from "./messaging.service";
 
@@ -36,6 +38,9 @@ class FakeApiContract implements ApiContract {
   async deleteMessage(p: DeleteMessageParams): Promise<Record<string, number>> {
     this.deleteCalls.push(p);
     return this.behavior.delete ? this.behavior.delete(p) : { [String(p.peer_id)]: 1 };
+  }
+  async usersGet(_p: UsersGetParams): Promise<UsersGetResponseEntry[]> {
+    return [];
   }
 }
 

@@ -1,4 +1,4 @@
-import { injectable, singleton } from "tsyringe";
+import { singleton } from "tsyringe";
 import { VK } from "vk-io";
 import { PluginError } from "@/common/errors";
 import { current } from "@/config";
@@ -25,6 +25,20 @@ export interface DeleteMessageParams {
   delete_for_all: 0 | 1;
 }
 
+export interface UsersGetParams {
+  user_ids: string; // comma-separated ids or screen names; VK accepts either
+  fields?: string;
+}
+
+export interface UsersGetResponseEntry {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  screen_name?: string;
+  photo_100?: string;
+  deactivated?: string;
+}
+
 export interface SendMessageResponse {
   conversation_message_id: number;
   message_id: number;
@@ -38,6 +52,7 @@ export interface ApiContract {
   sendMessage(p: SendMessageParams): Promise<SendMessageResponse>;
   editMessage(p: EditMessageParams): Promise<number>;
   deleteMessage(p: DeleteMessageParams): Promise<Record<string, number>>;
+  usersGet(p: UsersGetParams): Promise<UsersGetResponseEntry[]>;
 }
 
 /**
@@ -51,7 +66,6 @@ export interface ApiContract {
  * group quota and the VK error 6 / error 9 policy apply uniformly.
  */
 @singleton()
-@injectable()
 export class VkClient implements ApiContract {
   private vk: VK | null = null;
 
@@ -93,6 +107,17 @@ export class VkClient implements ApiContract {
         delete_for_all: p.delete_for_all === 1,
       });
       return res as unknown as Record<string, number>;
+    });
+  }
+
+  usersGet(p: UsersGetParams): Promise<UsersGetResponseEntry[]> {
+    return this.limiter.withRetry(async () => {
+      const vk = this.getVk();
+      const res = await vk.api.users.get({
+        user_ids: p.user_ids.split(",").map((s) => s.trim()),
+        fields: (p.fields ? p.fields.split(",").map((s) => s.trim()) : undefined) as never,
+      });
+      return res as unknown as UsersGetResponseEntry[];
     });
   }
 

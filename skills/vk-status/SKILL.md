@@ -5,25 +5,44 @@ user-invocable: true
 allowed-tools:
   - Bash(curl http://127.0.0.1:6060/healthz)
   - Bash(curl http://127.0.0.1:6060/readyz)
+  - Bash(curl http://127.0.0.1:6060/admin/*)
   - Read
 ---
 
-# /vk:status — VK Channel Status (M0)
+# /vk:status — VK Channel Status
 
-Reports health of the running VK plugin.
+Aggregates health, runtime status, allowlist counts, and pending pairings
+into a single summary.
 
-## M0 implementation
+## Steps
 
 1. `curl -s http://127.0.0.1:6060/healthz` — should return `{"ok":true}`.
-2. `curl -s http://127.0.0.1:6060/readyz` — returns `{"ok":true,"mcp":true}`
-   once the MCP transport is connected.
-3. Read `~/.claude/channels/vk/.env` (if present) and report which `VK_*`
-   keys are set (mask `VK_TOKEN`).
+2. `curl -s http://127.0.0.1:6060/readyz` — `{"ok":true,"mcp":true}` once
+   the MCP transport is connected.
+3. `curl -s http://127.0.0.1:6060/admin/state` — runtime block with
+   `transport`, `vk_connected`, `last_error`, `last_event_at`, plus the
+   persisted `longpoll` cursor and `recent_messages_count`.
+4. `curl -s http://127.0.0.1:6060/admin/config` — effective config with
+   `vk_token` and `webhook_secret` redacted to `"***"`.
+5. `curl -s http://127.0.0.1:6060/admin/access/policies` — current DM and
+   group-chat policies.
+6. `curl -s http://127.0.0.1:6060/admin/access/chats` — allowed chat count
+   and per-chat sender count.
+7. `curl -s http://127.0.0.1:6060/admin/access/pairings` — outstanding
+   pairing codes (and their expiry).
 
-If either probe fails, tell the user the plugin isn't running and remind them
-to launch with `claude --dangerously-load-development-channels plugin:vk@suxrobgm/claude-vk`.
+Render as a compact status block, e.g.:
 
-## Future shape (M2+)
+```
+VK channel
+  transport:        longpoll  (connected)
+  community:        @claude_vk  (id 123456789)
+  last event:       2026-05-14T10:42:18Z
+  policies:         dm=allowlist, group_chat=pairing
+  allowed chats:    3 (12 senders total)
+  pending pairings: 1
+```
 
-Adds: long-poll connection health, last inbound message timestamp, community
-handle, policy summary, sender count per chat, last VK API error.
+If either liveness probe fails, the plugin isn't running. Remind the user
+to launch with
+`claude --dangerously-load-development-channels plugin:vk@suxrobgm/claude-vk`.
