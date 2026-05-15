@@ -1,7 +1,6 @@
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { runWithEnvelope } from "@/common/utils/tool-envelope";
-import { StateStore } from "@/state/state.store";
 import type { VkApi } from "@/vk/api";
 import { chunkText } from "@/vk/chunk-text";
 import { VkClient } from "@/vk/client";
@@ -18,6 +17,7 @@ import {
   type SendMessageResult,
 } from "./messaging.schema";
 import { nextRandomId } from "./random-id";
+import { RecentSentMessages } from "./recent-sent";
 
 /**
  * Outbound VK messaging operations. Each method returns the structured
@@ -30,7 +30,7 @@ import { nextRandomId } from "./random-id";
 export class MessagingService {
   constructor(
     private readonly vk: VkClient,
-    private readonly state: StateStore,
+    private readonly recent: RecentSentMessages,
   ) {}
 
   /**
@@ -105,8 +105,8 @@ export class MessagingService {
         random_id: nextRandomId(),
       });
       cmids.push(res.conversation_message_id);
-      // Feed the recent-messages ring so M4's reply-to-bot detection works.
-      await this.state.pushRecentMessage(input.peer_id, res.conversation_message_id);
+      // Feed the recent-messages ring so reply-to-bot detection works.
+      this.recent.push(input.peer_id, res.conversation_message_id);
     }
     logger.info(
       { peer_id: input.peer_id, chunks: chunks.length, first_cmid: cmids[0] },

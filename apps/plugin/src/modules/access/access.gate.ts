@@ -1,5 +1,5 @@
 import { singleton } from "tsyringe";
-import type { InboundMessage } from "@/modules/inbound";
+import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { AccessStore } from "./access.store";
 
 export type GateResult =
@@ -20,11 +20,6 @@ export class AccessGate {
   check(msg: InboundMessage): GateResult {
     const file = this.access.get();
     const policy = msg.is_group_chat ? file.policies.group_chat : file.policies.dm;
-
-    if (policy === "open") {
-      // 'open' is rejected for group_chat by the schema, so this only fires for DM.
-      return { kind: "allow" };
-    }
 
     const chat = file.chats[String(msg.peer_id)];
     if (!chat) {

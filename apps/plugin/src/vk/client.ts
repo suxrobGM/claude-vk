@@ -11,6 +11,7 @@ import type {
   GetHistoryParams,
   GetHistoryResponse,
   GetPhotoUploadServerParams,
+  GroupsGetByIdResponseEntry,
   MarkAsReadParams,
   SavedAttachmentRef,
   SaveMessagesPhotoParams,
@@ -182,9 +183,15 @@ export class VkClient implements VkApi {
     });
   }
 
-  /** Test/hot-reload helper: drop the cached vk-io instance. */
-  reset(): void {
-    this.vk = null;
+  groupsGetSelf(): Promise<GroupsGetByIdResponseEntry> {
+    return this.run(async (vk) => {
+      const raw = await vk.api.groups.getById({});
+      const first = raw.groups[0];
+      if (!first) {
+        throw new VkApiError(0, "groups.getById returned empty result");
+      }
+      return first;
+    });
   }
 
   /** Wrap one vk-io call with the shared rate-limit-plus-retry policy. */

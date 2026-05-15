@@ -2,9 +2,9 @@ import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { StatusRegistry } from "@/common/status";
 import { current as currentConfig } from "@/config";
-import { StateStore } from "@/state/state.store";
+import { EventIdDedup } from "./event-dedup";
 import { InboundService } from "./inbound.service";
-import { webhookMessageNewToRaw, type VkCallbackMessageNewObject } from "./webhook-adapter";
+import { webhookMessageNewToInbound, type VkCallbackMessageNewObject } from "./webhook-adapter";
 import type { WebhookEnvelope } from "./webhook.schema";
 
 /**
@@ -20,7 +20,7 @@ export class WebhookService {
 
   constructor(
     private readonly inbound: InboundService,
-    private readonly state: StateStore,
+    private readonly dedup: EventIdDedup,
     private readonly status: StatusRegistry,
   ) {}
 
@@ -34,14 +34,13 @@ export class WebhookService {
     }
 
     if (body.type === "confirmation") {
-      this.status.setTransport("callback");
       this.status.markConnected();
       return cfg.webhookConfirmation ?? "ok";
     }
 
     if (body.type === "message_new") {
       if (body.event_id) {
-        const isNew = await this.state.pushEventId(body.event_id);
+        const isNew = this.dedup.add(body.event_id);
         if (!isNew) {
           logger.debug({ event_id: body.event_id }, "duplicate webhook event_id; ignoring");
           return "ok";
@@ -56,8 +55,9 @@ export class WebhookService {
         return "ok";
       }
 
+      this.status.markConnected();
       this.status.markEvent();
-      void this.inbound.handle(webhookMessageNewToRaw(body.object)).catch((err) => {
+      void this.inbound.handle(webhookMessageNewToInbound(body.object)).catch((err) => {
         logger.error({ err }, "inbound.handle threw from webhook (should never happen)");
       });
       return "ok";
@@ -65,11 +65,6 @@ export class WebhookService {
 
     logger.debug({ type: body.type }, "unhandled webhook event type");
     return "ok";
-  }
-
-  /** Test-only: reset the once-per-instance warning latch. */
-  _resetWarnState(): void {
-    this.warnedMissingEventId = false;
   }
 }
 

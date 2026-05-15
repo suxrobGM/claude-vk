@@ -1,38 +1,24 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { container } from "@/common/di";
 import { logger } from "@/common/logger";
-import { StatusRegistry } from "@/common/status";
-import { current as currentConfig } from "@/config";
-import { AccessStore } from "@/modules/access/access.store";
+import { CommunityResolver } from "@/modules/access/community-resolver";
 import { startPermissionRelay } from "@/modules/permission-relay/permission-relay.startup";
-import { UsersCache } from "@/modules/users/users.cache";
-import { StateStore } from "@/state/state.store";
-import { VkLongPoll } from "@/vk/long-poll";
 import { InboundService } from "./inbound.service";
 import { ChannelNotifier } from "./notifier";
 
 /**
- * Boots stores, wires the channel notifier with the live MCP handle, and
- * starts the inbound transport. Called once from `app.ts` after the MCP
- * stdio transport has connected. In `callback` mode no transport boots
- * here — the Elysia controller drives `InboundService.handle` directly.
+ * Wires the channel notifier with the live MCP handle and kicks off the
+ * community-identity prefetch. The Elysia `inboundController` drives
+ * `InboundService.handle` from incoming `POST /webhook/vk` requests. Stores
+ * are loaded earlier in `app.ts` so they're ready when MCP tools run.
  */
-export async function startInbound(mcp: McpServer): Promise<void> {
-  await container.resolve(StateStore).init();
-  await container.resolve(AccessStore).init();
-  await container.resolve(UsersCache).init();
+export function startInbound(mcp: McpServer): void {
+  container.resolve(CommunityResolver).prefetch();
 
   const service = container.resolve(InboundService);
   const notifier = new ChannelNotifier(mcp);
   service.setNotifier(notifier);
   startPermissionRelay(mcp, notifier);
 
-  if (currentConfig().transport === "callback") {
-    container.resolve(StatusRegistry).setTransport("callback");
-    logger.info("transport=callback; long-poll skipped, webhook controller mounted by app.ts");
-    return;
-  }
-
-  const longPoll = container.resolve(VkLongPoll);
-  await longPoll.start((raw) => service.handle(raw));
+  logger.info("inbound ready; webhook controller mounted");
 }

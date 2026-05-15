@@ -2,6 +2,7 @@ import { singleton } from "tsyringe";
 import { BadRequestError, NotFoundError } from "@/common/errors";
 import { UsersCache } from "@/modules/users/users.cache";
 import type {
+  ChatEntry,
   ChatKind,
   DmPolicy,
   GroupChatPolicy,
@@ -49,14 +50,13 @@ export class AccessService {
 
   /** Full chat entry for one peer. Throws {@link NotFoundError} if not allowed. */
   getChat(peerId: string) {
-    const chat = this.store.get().chats[peerId];
-    if (!chat) throw new NotFoundError("chat-not-allowed");
+    const chat = this.requireChat(peerId);
     return { peer_id: Number(peerId), ...chat };
   }
 
   /** Remove a chat entirely. Throws {@link NotFoundError} if not allowed. */
   async removeChat(peerId: string) {
-    if (!this.store.get().chats[peerId]) throw new NotFoundError("chat-not-allowed");
+    this.requireChat(peerId);
     await this.store.update((draft) => {
       delete draft.chats[peerId];
     });
@@ -65,8 +65,7 @@ export class AccessService {
 
   /** Sender ids for one chat. Throws {@link NotFoundError} if not allowed. */
   listSenders(peerId: string) {
-    const chat = this.store.get().chats[peerId];
-    if (!chat) throw new NotFoundError("chat-not-allowed");
+    const chat = this.requireChat(peerId);
     return { peer_id: Number(peerId), senders: chat.senders.slice() };
   }
 
@@ -76,7 +75,7 @@ export class AccessService {
    * {@link BadRequestError} if the user can't be resolved.
    */
   async addSender(peerId: string, input: { user_id?: number; screen_name?: string }) {
-    if (!this.store.get().chats[peerId]) throw new NotFoundError("chat-not-allowed");
+    this.requireChat(peerId);
     let userId: number | null = input.user_id ?? null;
     if (!userId && input.screen_name) {
       userId = await this.users.resolveScreenName(input.screen_name);
@@ -96,8 +95,7 @@ export class AccessService {
    */
   async removeSender(peerId: string, userIdStr: string): Promise<void> {
     const userId = Number(userIdStr);
-    const chat = this.store.get().chats[peerId];
-    if (!chat) throw new NotFoundError("chat-not-allowed");
+    const chat = this.requireChat(peerId);
     if (!chat.senders.includes(userId)) throw new NotFoundError("sender-not-listed");
     await this.store.update((draft) => {
       const c = draft.chats[peerId]!;
@@ -105,19 +103,19 @@ export class AccessService {
     });
   }
 
+  private requireChat(peerId: string): ChatEntry {
+    const chat = this.store.get().chats[peerId];
+    if (!chat) throw new NotFoundError("chat-not-allowed");
+    return chat;
+  }
+
   /** Read both peer-type policies. */
   getPolicies(): { dm: DmPolicy; group_chat: GroupChatPolicy } {
     return this.store.get().policies;
   }
 
-  /**
-   * Set the policy for one peer-type. Throws {@link BadRequestError} if
-   * `open` is set for `group_chat`.
-   */
+  /** Set the policy for one peer-type. */
   async setPolicy(peerType: "dm" | "group_chat", policy: DmPolicy | GroupChatPolicy) {
-    if (peerType === "group_chat" && policy === "open") {
-      throw new BadRequestError("open-not-allowed-for-group_chat");
-    }
     await this.store.update((draft) => {
       if (peerType === "dm") draft.policies.dm = policy as DmPolicy;
       else draft.policies.group_chat = policy as GroupChatPolicy;
@@ -131,10 +129,7 @@ export class AccessService {
    * if the chat is a DM (mention policy is group-only).
    */
   async setMentionPolicy(peerId: string, policy: MentionPolicy) {
-    const chat = this.store.get().chats[peerId];
-    if (!chat) {
-      throw new NotFoundError("chat-not-allowed");
-    }
+    const chat = this.requireChat(peerId);
     if (chat.kind !== "group_chat") {
       throw new BadRequestError("mention-policy-group-only");
     }

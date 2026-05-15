@@ -1,20 +1,26 @@
 import "reflect-metadata";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
-import { StateStore } from "@/state/state.store";
+import { RecentSentMessages } from "@/modules/messaging/recent-sent";
+import type { VkClient } from "@/vk/client";
+import { CommunityResolver, type CommunityIdentity } from "./community-resolver";
 import { isPairCommand, MentionDetector } from "./mention";
 
-interface RecentMessage {
-  peer_id: number;
-  conversation_message_id: number;
+function makeRecent(
+  entries: { peer_id: number; conversation_message_id: number }[],
+): RecentSentMessages {
+  const recent = new RecentSentMessages();
+  for (const e of entries) recent.push(e.peer_id, e.conversation_message_id);
+  return recent;
 }
 
-function makeStateStore(recent: RecentMessage[]): StateStore {
-  const store = new StateStore();
-  (store as unknown as { store: { get(): { recent_messages: RecentMessage[] } } }).store = {
-    get: () => ({ recent_messages: recent }),
-  };
-  return store;
+function makeDetector(recent: RecentSentMessages): MentionDetector {
+  // Seed the resolver's identity directly — bypasses the VK call.
+  const stubVk = {} as unknown as VkClient;
+  const resolver = new CommunityResolver(stubVk);
+  const identity: CommunityIdentity = { id: "12345", screen_name: "claudebot" };
+  (resolver as unknown as { identity: CommunityIdentity }).identity = identity;
+  return new MentionDetector(recent, resolver);
 }
 
 function makeMsg(over: Partial<InboundMessage> = {}): InboundMessage {
@@ -32,70 +38,50 @@ function makeMsg(over: Partial<InboundMessage> = {}): InboundMessage {
   };
 }
 
-const originalCommunityId = process.env.VK_COMMUNITY_ID;
-const originalScreenName = process.env.VK_COMMUNITY_SCREEN_NAME;
-
-beforeEach(() => {
-  process.env.VK_COMMUNITY_ID = "12345";
-  process.env.VK_COMMUNITY_SCREEN_NAME = "claudebot";
-  // Force config reload so the next current() reads the new env.
-  const { reload } = require("@/config") as typeof import("@/config");
-  reload();
-});
-
-afterEach(() => {
-  if (originalCommunityId === undefined) delete process.env.VK_COMMUNITY_ID;
-  else process.env.VK_COMMUNITY_ID = originalCommunityId;
-  if (originalScreenName === undefined) delete process.env.VK_COMMUNITY_SCREEN_NAME;
-  else process.env.VK_COMMUNITY_SCREEN_NAME = originalScreenName;
-  const { reload } = require("@/config") as typeof import("@/config");
-  reload();
-});
-
 describe("MentionDetector.detect", () => {
   it("detects canonical [club{ID}|...] mention", () => {
-    const det = new MentionDetector(makeStateStore([]));
+    const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "Hey [club12345|@claudebot] ping" }));
     expect(sig.name_mention).toBe(true);
     expect(sig.reply_to_bot).toBe(false);
   });
 
   it("ignores [club{ID}|...] when ID does not match community", () => {
-    const det = new MentionDetector(makeStateStore([]));
+    const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "Hey [club99999|@other] ping" }));
     expect(sig.name_mention).toBe(false);
   });
 
   it("detects @<screen_name> mention case-insensitively", () => {
-    const det = new MentionDetector(makeStateStore([]));
+    const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "yo @ClaudeBot what's up" }));
     expect(sig.name_mention).toBe(true);
   });
 
   it("ignores @<other_name> mentions", () => {
-    const det = new MentionDetector(makeStateStore([]));
+    const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "yo @someone_else" }));
     expect(sig.name_mention).toBe(false);
   });
 
   it("detects reply_to that matches a recent bot message for this peer", () => {
-    const det = new MentionDetector(
-      makeStateStore([{ peer_id: 2_000_000_001, conversation_message_id: 999 }]),
+    const det = makeDetector(
+      makeRecent([{ peer_id: 2_000_000_001, conversation_message_id: 999 }]),
     );
     const sig = det.detect(makeMsg({ reply_to: 999 }));
     expect(sig.reply_to_bot).toBe(true);
   });
 
   it("does not flag reply_to from a different peer", () => {
-    const det = new MentionDetector(
-      makeStateStore([{ peer_id: 2_000_000_002, conversation_message_id: 999 }]),
+    const det = makeDetector(
+      makeRecent([{ peer_id: 2_000_000_002, conversation_message_id: 999 }]),
     );
     const sig = det.detect(makeMsg({ reply_to: 999 }));
     expect(sig.reply_to_bot).toBe(false);
   });
 
   it("keyboard_payload is false in v1 (no payload field on InboundMessage yet)", () => {
-    const det = new MentionDetector(makeStateStore([]));
+    const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "" }));
     expect(sig.keyboard_payload).toBe(false);
   });

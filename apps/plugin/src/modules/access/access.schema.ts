@@ -8,13 +8,9 @@ import { NumericIdStringSchema, OkResponseSchema } from "@/types/common.schema";
  * later — they just stop dropping `is_group_chat` paths.
  */
 
-export const DmPolicySchema = t.Union([
-  t.Literal("pairing"),
-  t.Literal("allowlist"),
-  t.Literal("open"),
-]);
-
-export const GroupChatPolicySchema = t.Union([t.Literal("pairing"), t.Literal("allowlist")]);
+export const PolicySchema = t.Union([t.Literal("pairing"), t.Literal("allowlist")]);
+export const DmPolicySchema = PolicySchema;
+export const GroupChatPolicySchema = PolicySchema;
 
 export const ChatKindSchema = t.Union([t.Literal("dm"), t.Literal("group_chat")]);
 

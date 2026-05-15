@@ -1,7 +1,7 @@
 import { singleton } from "tsyringe";
-import { current as currentConfig } from "@/config";
-import type { InboundMessage } from "@/modules/inbound";
-import { StateStore } from "@/state/state.store";
+import type { InboundMessage } from "@/modules/inbound/inbound.types";
+import { RecentSentMessages } from "@/modules/messaging/recent-sent";
+import { CommunityResolver } from "./community-resolver";
 
 /**
  * Per-message attention signals derived from raw text + reply state. The
@@ -31,12 +31,15 @@ const SCREEN_NAME_RE = /@([a-zA-Z0-9_.]+)/g;
  */
 @singleton()
 export class MentionDetector {
-  constructor(private readonly state: StateStore) {}
+  constructor(
+    private readonly recent: RecentSentMessages,
+    private readonly community: CommunityResolver,
+  ) {}
 
   detect(msg: InboundMessage): MentionSignals {
-    const cfg = currentConfig();
-    const communityId = cfg.vkCommunityId;
-    const screenName = cfg.vkCommunityScreenName?.toLowerCase();
+    const identity = this.community.get();
+    const communityId = identity?.id;
+    const screenName = identity?.screen_name?.toLowerCase();
 
     return {
       name_mention: this.hasNameMention(msg.text, communityId, screenName),
@@ -70,8 +73,7 @@ export class MentionDetector {
 
   private isReplyToBot(peerId: number, replyToCmid: number | undefined): boolean {
     if (replyToCmid == null) return false;
-    const recent = this.state.getRecentMessages();
-    for (const entry of recent) {
+    for (const entry of this.recent.all()) {
       if (entry.peer_id === peerId && entry.conversation_message_id === replyToCmid) {
         return true;
       }

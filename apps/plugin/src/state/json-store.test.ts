@@ -100,27 +100,6 @@ describe("JsonStore", () => {
     expect(store.get().count).toBe(10);
   });
 
-  it("notifies onChange listeners on update", async () => {
-    const store = await JsonStore.create<Shape>({
-      path,
-      schema: Schema,
-      defaults: { count: 0 },
-    });
-    const seen: number[] = [];
-    const dispose = store.onChange((next) => seen.push(next.count));
-    await store.update((d) => {
-      d.count = 1;
-    });
-    await store.update((d) => {
-      d.count = 2;
-    });
-    dispose();
-    await store.update((d) => {
-      d.count = 3;
-    });
-    expect(seen).toEqual([1, 2]);
-  });
-
   it("throws when accessed before init()", () => {
     const store = new JsonStore<Shape>({ path, schema: Schema, defaults: { count: 0 } });
     expect(() => store.get()).toThrow(/before init/);

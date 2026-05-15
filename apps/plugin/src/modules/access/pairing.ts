@@ -1,7 +1,6 @@
 import { randomInt } from "node:crypto";
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
-import { current as currentConfig } from "@/config";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { MessagingService } from "@/modules/messaging/messaging.service";
 import type { ChatEntry, ChatKind, PendingPair } from "./access.schema";
@@ -11,12 +10,9 @@ const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // 32 chars, no 0/O/1/I/L
 const CODE_LENGTH = 6;
 const TTL_MS = 10 * 60 * 1000;
 
-const MESSAGES = {
-  en: (code: string) =>
-    `Hi! To connect this chat to Claude Code, run /vk:access pair ${code} in your Claude session (expires in 10 minutes).`,
-  ru: (code: string) =>
-    `Привет! Чтобы подключить этот чат к Claude Code, выполните /vk:access pair ${code} в сессии Claude (срок 10 минут).`,
-};
+function pairingMessage(code: string): string {
+  return `Hi! To connect this chat to Claude Code, run /vk:access pair ${code} in your Claude session (expires in 10 minutes).`;
+}
 
 export type ConsumeResult =
   | { ok: true; peer_id: number; chat: ChatEntry }
@@ -52,8 +48,7 @@ export class PairingService {
       };
     });
 
-    const locale = currentConfig().locale === "ru" ? "ru" : "en";
-    const text = MESSAGES[locale](code);
+    const text = pairingMessage(code);
     const result = await this.messaging.send({ peer_id: msg.peer_id, text });
     if (!result.ok) {
       logger.warn(

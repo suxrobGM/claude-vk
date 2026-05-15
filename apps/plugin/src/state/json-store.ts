@@ -26,7 +26,6 @@ export interface JsonStoreOptions<T> {
 export class JsonStore<T> {
   private cache: T | undefined;
   private writeChain: Promise<void> = Promise.resolve();
-  private readonly listeners = new Set<(next: Readonly<T>) => void>();
 
   constructor(private readonly opts: JsonStoreOptions<T>) {}
 
@@ -64,25 +63,14 @@ export class JsonStore<T> {
       this.assertValid(candidate, "update");
       await this.atomicWrite(candidate);
       this.cache = candidate;
-      for (const cb of this.listeners) cb(this.cache as Readonly<T>);
     });
     this.writeChain = next.catch(() => undefined);
     await next;
   }
 
-  /**
-   * Re-read from disk, validate, swap the in-memory copy, notify listeners.
-   * Unused in M1; M3 will wire `fs.watch` to it for hand-edit hot reload.
-   */
+  /** Re-read from disk, validate, swap the in-memory copy. Wired to `fs.watch` by `AccessStore`. */
   async reload(): Promise<void> {
     this.cache = await this.loadOrInit();
-    for (const cb of this.listeners) cb(this.cache as Readonly<T>);
-  }
-
-  /** Subscribe to in-memory swaps. Returns a disposer. */
-  onChange(cb: (next: Readonly<T>) => void): () => void {
-    this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
   }
 
   private async loadOrInit(): Promise<T> {

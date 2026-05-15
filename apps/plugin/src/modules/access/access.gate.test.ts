@@ -30,13 +30,6 @@ function makeMsg(over: Partial<InboundMessage> = {}): InboundMessage {
 const GROUP_PEER = 2_000_000_042;
 
 describe("AccessGate.check", () => {
-  it("allows when DM policy is open", () => {
-    const gate = new AccessGate(
-      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "open", group_chat: "pairing" } }),
-    );
-    expect(gate.check(makeMsg()).kind).toBe("allow");
-  });
-
   it("returns need_pair for unknown peer under pairing policy", () => {
     const gate = new AccessGate(makeStore({ ...ACCESS_FILE_DEFAULTS }));
     expect(gate.check(makeMsg()).kind).toBe("need_pair");

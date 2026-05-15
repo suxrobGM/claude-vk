@@ -17,7 +17,6 @@ const RELOAD_DEBOUNCE_MS = 100;
 @singleton()
 export class AccessStore {
   private store: JsonStore<AccessFile> | null = null;
-  private watcher: ReturnType<typeof watch> | null = null;
   private reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
@@ -40,18 +39,6 @@ export class AccessStore {
     return this.getStore().update(fn);
   }
 
-  /** Subscribe to in-memory swaps (hot-reload, programmatic update). */
-  onChange(cb: (next: Readonly<AccessFile>) => void): () => void {
-    return this.getStore().onChange(cb);
-  }
-
-  /** Stop the fs.watch loop; called from tests or on process shutdown. */
-  stop(): void {
-    if (this.reloadTimer) clearTimeout(this.reloadTimer);
-    this.watcher?.close();
-    this.watcher = null;
-  }
-
   private getStore(): JsonStore<AccessFile> {
     if (!this.store) {
       throw new PluginError("store_not_initialized", "AccessStore accessed before init()");
@@ -61,7 +48,7 @@ export class AccessStore {
 
   private startWatcher(): void {
     try {
-      this.watcher = watch(accessPath, { persistent: false }, () => this.scheduleReload());
+      watch(accessPath, { persistent: false }, () => this.scheduleReload());
     } catch (err) {
       logger.warn({ err }, "access.json watch failed; hand-edits will not hot-reload");
     }

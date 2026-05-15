@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { isReady as isMcpReady } from "@/mcp/server";
+import { isMcpReady } from "@/mcp/server";
 import { HealthzResponseSchema, ReadyzResponseSchema } from "./health.schema";
 
 export const healthController = new Elysia({ name: "health", tags: ["Health"] })

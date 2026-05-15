@@ -6,6 +6,7 @@ import type {
   GetHistoryParams,
   GetHistoryResponse,
   GetPhotoUploadServerParams,
+  GroupsGetByIdResponseEntry,
   MarkAsReadParams,
   SavedAttachmentRef,
   SaveMessagesPhotoParams,
@@ -38,4 +39,6 @@ export interface VkApi {
   saveMessagesPhoto(p: SaveMessagesPhotoParams): Promise<SavedAttachmentRef>;
   getDocUploadServer(p: GetDocUploadServerParams): Promise<UploadServerInfo>;
   saveDoc(p: DocsSaveParams): Promise<SavedAttachmentRef>;
+  /** Returns the community the access token belongs to (no params needed). */
+  groupsGetSelf(): Promise<GroupsGetByIdResponseEntry>;
 }

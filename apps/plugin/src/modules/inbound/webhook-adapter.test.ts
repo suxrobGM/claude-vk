@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { webhookMessageNewToRaw, type VkCallbackMessageNewObject } from "./webhook-adapter";
+import { webhookMessageNewToInbound, type VkCallbackMessageNewObject } from "./webhook-adapter";
 
 const baseMessage = {
   id: 42,
@@ -9,32 +9,50 @@ const baseMessage = {
   text: "hi",
 };
 
-describe("webhookMessageNewToRaw", () => {
+describe("webhookMessageNewToInbound", () => {
   test("maps core fields", () => {
-    const raw = webhookMessageNewToRaw({ message: baseMessage });
-    expect(raw.peer_id).toBe(2_000_000_001);
-    expect(raw.from_id).toBe(123);
-    expect(raw.conversation_message_id).toBe(7);
-    expect(raw.message_id).toBe(42);
-    expect(raw.text).toBe("hi");
-    expect(raw.attachments).toEqual([]);
-    expect(raw.reply).toBeUndefined();
+    const msg = webhookMessageNewToInbound({ message: baseMessage });
+    expect(msg.peer_id).toBe(2_000_000_001);
+    expect(msg.from_id).toBe(123);
+    expect(msg.conversation_message_id).toBe(7);
+    expect(msg.text).toBe("hi");
+    expect(msg.attachments).toEqual([]);
+    expect(msg.reply_to).toBeUndefined();
+    expect(msg.is_group_chat).toBe(true);
+    expect(msg.mentioned_bot).toBe(false);
+    expect(msg.is_reply_to_bot).toBe(false);
   });
 
   test("defaults missing peer_id/from_id to 0 (downstream gate drops)", () => {
-    const raw = webhookMessageNewToRaw({ message: {} });
-    expect(raw.peer_id).toBe(0);
-    expect(raw.from_id).toBe(0);
+    const msg = webhookMessageNewToInbound({ message: {} });
+    expect(msg.peer_id).toBe(0);
+    expect(msg.from_id).toBe(0);
+    expect(msg.is_group_chat).toBe(false);
   });
 
   test("handles empty object", () => {
-    const raw = webhookMessageNewToRaw({} as VkCallbackMessageNewObject);
-    expect(raw.peer_id).toBe(0);
-    expect(raw.attachments).toEqual([]);
+    const msg = webhookMessageNewToInbound({} as VkCallbackMessageNewObject);
+    expect(msg.peer_id).toBe(0);
+    expect(msg.attachments).toEqual([]);
+    expect(msg.text).toBe("");
+  });
+
+  test("DM peer_id => is_group_chat=false", () => {
+    const msg = webhookMessageNewToInbound({
+      message: { ...baseMessage, peer_id: 12345 },
+    });
+    expect(msg.is_group_chat).toBe(false);
+  });
+
+  test("falls back to message id when conversation_message_id is missing", () => {
+    const msg = webhookMessageNewToInbound({
+      message: { id: 99, peer_id: 1, from_id: 1, text: "x" },
+    });
+    expect(msg.conversation_message_id).toBe(99);
   });
 
   test("photo attachment picks largest size by area", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [
@@ -51,15 +69,15 @@ describe("webhookMessageNewToRaw", () => {
         ],
       },
     });
-    expect(raw.attachments).toHaveLength(1);
-    expect(raw.attachments![0]).toEqual({
+    expect(msg.attachments).toHaveLength(1);
+    expect(msg.attachments[0]).toEqual({
       type: "photo",
       url: "https://u.com/large.jpg",
     });
   });
 
   test("photo falls back to last size when width/height absent", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [
@@ -72,11 +90,11 @@ describe("webhookMessageNewToRaw", () => {
         ],
       },
     });
-    expect(raw.attachments![0]!.url).toBe("https://u.com/b.jpg");
+    expect(msg.attachments[0]!.url).toBe("https://u.com/b.jpg");
   });
 
   test("audio_message prefers link_ogg", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [
@@ -90,11 +108,11 @@ describe("webhookMessageNewToRaw", () => {
         ],
       },
     });
-    expect(raw.attachments![0]!.url).toBe("https://u.com/v.ogg");
+    expect(msg.attachments[0]!.url).toBe("https://u.com/v.ogg");
   });
 
   test("audio_message falls back to link_mp3", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [
@@ -102,39 +120,49 @@ describe("webhookMessageNewToRaw", () => {
         ],
       },
     });
-    expect(raw.attachments![0]!.url).toBe("https://u.com/v.mp3");
+    expect(msg.attachments[0]!.url).toBe("https://u.com/v.mp3");
   });
 
   test("doc picks url", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [{ type: "doc", doc: { url: "https://u.com/x.pdf" } }],
       },
     });
-    expect(raw.attachments![0]!.url).toBe("https://u.com/x.pdf");
+    expect(msg.attachments[0]!.url).toBe("https://u.com/x.pdf");
   });
 
   test("unknown attachment types preserve type with undefined url", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         attachments: [{ type: "sticker" }, { type: "wall" }],
       },
     });
-    expect(raw.attachments).toEqual([
+    expect(msg.attachments).toEqual([
       { type: "sticker", url: undefined },
       { type: "wall", url: undefined },
     ]);
   });
 
   test("reply_message prefers conversation_message_id", () => {
-    const raw = webhookMessageNewToRaw({
+    const msg = webhookMessageNewToInbound({
       message: {
         ...baseMessage,
         reply_message: { conversation_message_id: 5, id: 9999 },
       },
     });
-    expect(raw.reply).toEqual({ conversation_message_id: 5, message_id: 9999 });
+    expect(msg.reply_to).toBe(5);
+  });
+
+  test("reply_message falls back to id", () => {
+    const msg = webhookMessageNewToInbound({
+      message: {
+        ...baseMessage,
+        reply_message: { id: 9999 },
+      },
+    });
+    expect(msg.reply_to).toBe(9999);
   });
 });

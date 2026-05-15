@@ -6,9 +6,8 @@ import { WebhookService } from "./webhook.service";
 const webhook = container.resolve(WebhookService);
 
 /**
- * VK Callback API receiver. Mounted only when `VK_TRANSPORT=callback` (see
- * `app.ts`). All dispatching lives in {@link WebhookService}; this controller
- * is the HTTP edge.
+ * VK Callback API receiver. All dispatching lives in {@link WebhookService};
+ * this controller is the HTTP edge.
  */
 export const inboundController = new Elysia({
   name: "inbound",

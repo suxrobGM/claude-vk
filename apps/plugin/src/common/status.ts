@@ -1,7 +1,6 @@
 import { singleton } from "tsyringe";
 
 export interface RuntimeStatus {
-  transport: "longpoll" | "callback" | "none";
   vk_connected: boolean;
   last_error: string | null;
   last_error_at: string | null;
@@ -9,15 +8,13 @@ export interface RuntimeStatus {
 }
 
 /**
- * Tiny in-process status sink the long-poll loop and webhook receiver write
- * to and the `/admin/state` endpoint reads. Lives outside `state.json` because
- * it would churn the file on every successful event without adding value
- * across restarts — the truth re-emerges from the next transport tick.
+ * Tiny in-process status sink the webhook receiver writes to and the
+ * `/admin/state` endpoint reads. Reset on every restart — the truth re-emerges
+ * from the next inbound event.
  */
 @singleton()
 export class StatusRegistry {
   private status: RuntimeStatus = {
-    transport: "none",
     vk_connected: false,
     last_error: null,
     last_error_at: null,
@@ -27,11 +24,6 @@ export class StatusRegistry {
   /** Read the current runtime status snapshot. */
   get(): Readonly<RuntimeStatus> {
     return this.status;
-  }
-
-  /** Set the active transport (`longpoll` / `callback` / `none`). */
-  setTransport(transport: RuntimeStatus["transport"]): void {
-    this.status = { ...this.status, transport };
   }
 
   /** Mark VK connected and clear any previously-recorded error. */

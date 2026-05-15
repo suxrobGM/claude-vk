@@ -1,7 +1,6 @@
 import "reflect-metadata";
 import { describe, expect, it } from "bun:test";
 import { PluginError, VkApiError } from "@/common/errors";
-import type { StateStore } from "@/state/state.store";
 import type { VkApi } from "@/vk/api";
 import type {
   DeleteMessageParams,
@@ -24,13 +23,7 @@ import type {
   UsersGetResponseEntry,
 } from "@/vk/api.types";
 import { MessagingService } from "./messaging.service";
-
-class FakeStateStore {
-  recent: { peer_id: number; conversation_message_id: number }[] = [];
-  async pushRecentMessage(peer_id: number, conversation_message_id: number): Promise<void> {
-    this.recent.push({ peer_id, conversation_message_id });
-  }
-}
+import { RecentSentMessages } from "./recent-sent";
 
 class FakeVkApi implements VkApi {
   sentCalls: SendMessageParams[] = [];
@@ -82,11 +75,17 @@ class FakeVkApi implements VkApi {
   async saveDoc(_p: DocsSaveParams): Promise<SavedAttachmentRef> {
     return { vk_ref: "" };
   }
+  async groupsGetSelf(): Promise<{ id: number; screen_name?: string }> {
+    return { id: 1, screen_name: "test" };
+  }
 }
 
-function makeService(vk: VkApi, state: FakeStateStore = new FakeStateStore()): MessagingService {
-  // Bypass DI: construct directly with the contract + a stub state store.
-  return new MessagingService(vk as never, state as unknown as StateStore);
+function makeService(
+  vk: VkApi,
+  recent: RecentSentMessages = new RecentSentMessages(),
+): MessagingService {
+  // Bypass DI: construct directly with the contract + the in-memory ring.
+  return new MessagingService(vk as never, recent);
 }
 
 describe("MessagingService.send", () => {
@@ -172,12 +171,12 @@ describe("MessagingService.send", () => {
 
   it("pushes every outbound cmid into the recent-messages ring", async () => {
     const vk = new FakeVkApi();
-    const state = new FakeStateStore();
-    const svc = makeService(vk, state);
+    const recent = new RecentSentMessages();
+    const svc = makeService(vk, recent);
     const text = "a".repeat(8000);
     await svc.send({ peer_id: 42, text });
-    expect(state.recent.length).toBe(vk.sentCalls.length);
-    expect(state.recent.every((r) => r.peer_id === 42)).toBe(true);
+    expect(recent.all().length).toBe(vk.sentCalls.length);
+    expect(recent.all().every((r) => r.peer_id === 42)).toBe(true);
   });
 });
 

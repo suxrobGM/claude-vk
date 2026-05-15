@@ -1,20 +1,19 @@
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
-import { current as currentConfig } from "@/config";
 import { AccessGate } from "@/modules/access/access.gate";
 import { isPairCommand, MentionDetector } from "@/modules/access/mention";
 import { PairingService } from "@/modules/access/pairing";
 import { PermissionRelayService } from "@/modules/permission-relay/permission-relay.service";
 import { UsersCache } from "@/modules/users/users.cache";
 import { AttachmentService } from "./attachments";
+import type { InboundMessage } from "./inbound.types";
 import type { ChannelNotifier } from "./notifier";
-import { normalize, type RawInbound } from "./router";
 
 /**
- * Inbound pipeline: normalize → gate → (pair | download + notify).
- * Every branch swallows exceptions so the long-poll loop is never interrupted
- * by a single bad message. The notifier is injected from `app.ts` at boot
- * (it carries the live `McpServer` handle) rather than via the container.
+ * Inbound pipeline: gate → (pair | download + notify). Every branch swallows
+ * exceptions so the webhook controller's 2xx contract is preserved. The
+ * notifier is injected from `app.ts` at boot (it carries the live `McpServer`
+ * handle) rather than via the container.
  */
 @singleton()
 export class InboundService {
@@ -34,10 +33,9 @@ export class InboundService {
     this.notifier = notifier;
   }
 
-  /** Run the inbound pipeline for a single raw VK update. Never throws. */
-  async handle(raw: RawInbound): Promise<void> {
+  /** Run the inbound pipeline for a single normalized VK message. Never throws. */
+  async handle(msg: InboundMessage): Promise<void> {
     try {
-      const msg = normalize(raw);
       const signals = this.mentions.detect(msg);
       msg.mentioned_bot = signals.name_mention || signals.reply_to_bot || signals.keyboard_payload;
       msg.is_reply_to_bot = signals.reply_to_bot;
@@ -60,9 +58,7 @@ export class InboundService {
 
       // Verdict short-circuit: AFTER gate (so we trust from_id), BEFORE notify
       // (so verdict text never becomes a <channel> block for Claude — PRD §15.1).
-      if (currentConfig().permissionRelay) {
-        if (await this.permissionRelay.tryResolveVerdict(msg)) return;
-      }
+      if (await this.permissionRelay.tryResolveVerdict(msg)) return;
 
       const withFiles = await this.attachments.downloadAll(
         msg.attachments,
@@ -79,7 +75,7 @@ export class InboundService {
 
       // Record the DM activator so an incoming permission_request knows where
       // to send the prompt. Group chats are explicitly excluded by PRD §15.2.
-      if (currentConfig().permissionRelay && !msg.is_group_chat) {
+      if (!msg.is_group_chat) {
         this.permissionRelay.recordLastDmActivator(msg.peer_id, msg.from_id);
       }
     } catch (err) {

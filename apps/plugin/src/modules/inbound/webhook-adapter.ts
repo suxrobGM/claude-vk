@@ -1,10 +1,10 @@
-import type { RawAttachment, RawInbound } from "./router";
+import { isGroupChat } from "@/common/utils/peer";
+import type { Attachment, InboundMessage } from "./inbound.types";
 
 /**
- * VK Callback API `message_new` object. Mirrors only the fields we consume —
- * snake_case throughout, in contrast to vk-io's camelCase Long Poll context.
- * Sibling to `vkContextToRaw` in `vk/long-poll.ts` (long-poll's equivalent
- * adapter), but kept here because the Callback shape is module-local concern.
+ * VK Callback API `message_new` object shape. Mirrors only the fields we
+ * consume — snake_case throughout. Translates straight to `InboundMessage`
+ * (no transport-agnostic intermediate shape since Long Poll is gone).
  */
 export interface VkCallbackMessageNewObject {
   message?: VkCallbackMessage;
@@ -27,31 +27,39 @@ export interface VkCallbackAttachment {
   doc?: { url?: string };
 }
 
+interface PhotoSize {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
 /**
- * Translate a VK Callback API `message_new.object` payload into the
- * transport-agnostic `RawInbound` shape. Pure — no I/O, no DI. Tolerates
- * partial payloads: missing peer_id / from_id default to 0 so the downstream
- * gate drops the message rather than crashing.
+ * Translate a VK Callback API `message_new.object` payload into our
+ * normalized `InboundMessage`. Pure — no I/O, no DI. Tolerates partial
+ * payloads: missing peer_id / from_id default to 0 so the downstream gate
+ * drops the message rather than crashing. `mentioned_bot` / `is_reply_to_bot`
+ * are initialized to false and later enriched by `MentionDetector`.
  */
-export function webhookMessageNewToRaw(object: VkCallbackMessageNewObject): RawInbound {
+export function webhookMessageNewToInbound(object: VkCallbackMessageNewObject): InboundMessage {
   const m = object.message ?? {};
-  const attachments: RawAttachment[] = (m.attachments ?? []).map((a) => ({
+  const messageId = m.conversation_message_id ?? m.id ?? 0;
+  const replyCmid = m.reply_message?.conversation_message_id ?? m.reply_message?.id;
+  const attachments: Attachment[] = (m.attachments ?? []).map((a) => ({
     type: a.type,
     url: pickAttachmentUrl(a),
   }));
+  const peerId = m.peer_id ?? 0;
   return {
-    peer_id: m.peer_id ?? 0,
+    peer_id: peerId,
     from_id: m.from_id ?? 0,
-    conversation_message_id: m.conversation_message_id,
-    message_id: m.id,
-    text: m.text,
+    conversation_message_id: messageId,
+    text: m.text ?? "",
     attachments,
-    reply: m.reply_message
-      ? {
-          conversation_message_id: m.reply_message.conversation_message_id,
-          message_id: m.reply_message.id,
-        }
-      : undefined,
+    reply_to: replyCmid,
+    is_group_chat: isGroupChat(peerId),
+    mentioned_bot: false,
+    is_reply_to_bot: false,
+    received_at: new Date().toISOString(),
   };
 }
 
@@ -68,15 +76,16 @@ function pickAttachmentUrl(a: VkCallbackAttachment): string | undefined {
   return undefined;
 }
 
-function pickLargestPhotoUrl(
-  sizes: Array<{ url?: string; width?: number; height?: number }>,
-): string | undefined {
+function pickLargestPhotoUrl(sizes: PhotoSize[]): string | undefined {
   // VK orders sizes ascending, so `>=` lets the last entry win ties — which
   // doubles as a fallback when width/height are absent (every entry has area 0).
-  let best: { url?: string; width?: number; height?: number } | undefined;
+  let best: PhotoSize | null = null;
   let bestArea = -1;
+
   for (const s of sizes) {
-    if (!s.url) continue;
+    if (!s.url) {
+      continue;
+    }
     const area = (s.width ?? 0) * (s.height ?? 0);
     if (area >= bestArea) {
       best = s;

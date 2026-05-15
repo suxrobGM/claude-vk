@@ -43,6 +43,13 @@ export interface UsersGetResponseEntry {
   deactivated?: string;
 }
 
+export interface GroupsGetByIdResponseEntry {
+  id: number;
+  name?: string;
+  screen_name?: string;
+  photo_100?: string;
+}
+
 export interface SendReactionParams {
   peer_id: number;
   cmid: number;

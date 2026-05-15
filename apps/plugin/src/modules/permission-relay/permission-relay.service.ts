@@ -77,14 +77,6 @@ export class PermissionRelayService {
       return;
     }
 
-    this.pending.set(params.request_id, {
-      request_id: params.request_id,
-      from_id: activator.from_id,
-      peer_id: activator.peer_id,
-      tool_name: params.tool_name,
-      created_at: Date.now(),
-    });
-
     const text = formatPrompt(params);
     const result = await this.messaging.send({ peer_id: activator.peer_id, text });
     if (!result.ok) {
@@ -92,12 +84,23 @@ export class PermissionRelayService {
         { peer_id: activator.peer_id, request_id: params.request_id, code: result.code },
         "permission relay: failed to DM prompt",
       );
-    } else {
-      logger.info(
-        { peer_id: activator.peer_id, request_id: params.request_id },
-        "permission relay: prompt DM sent",
+      await this.notifier?.warn(
+        `permission relay: failed to DM prompt for ${params.request_id} (${result.code}) — using terminal prompt`,
       );
+      return;
     }
+
+    this.pending.set(params.request_id, {
+      request_id: params.request_id,
+      from_id: activator.from_id,
+      peer_id: activator.peer_id,
+      tool_name: params.tool_name,
+      created_at: Date.now(),
+    });
+    logger.info(
+      { peer_id: activator.peer_id, request_id: params.request_id },
+      "permission relay: prompt DM sent",
+    );
   }
 
   /**

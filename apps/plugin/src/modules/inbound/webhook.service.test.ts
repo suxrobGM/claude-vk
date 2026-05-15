@@ -1,24 +1,23 @@
 import "reflect-metadata";
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { StatusRegistry } from "@/common/status";
-import { reload } from "@/config";
-import type { StateStore } from "@/state/state.store";
+import type { EventIdDedup } from "./event-dedup";
 import type { InboundService } from "./inbound.service";
-import type { RawInbound } from "./router";
+import type { InboundMessage } from "./inbound.types";
 import type { WebhookEnvelope } from "./webhook.schema";
 import { WebhookService } from "./webhook.service";
 
 class FakeInbound {
-  handled: RawInbound[] = [];
-  async handle(raw: RawInbound): Promise<void> {
-    this.handled.push(raw);
+  handled: InboundMessage[] = [];
+  async handle(msg: InboundMessage): Promise<void> {
+    this.handled.push(msg);
   }
 }
 
-class FakeState {
+class FakeDedup {
   seen = new Set<string>();
   pushed: string[] = [];
-  async pushEventId(id: string): Promise<boolean> {
+  add(id: string): boolean {
     this.pushed.push(id);
     if (this.seen.has(id)) return false;
     this.seen.add(id);
@@ -27,12 +26,8 @@ class FakeState {
 }
 
 class FakeStatus {
-  transports: string[] = [];
   connected = 0;
   events = 0;
-  setTransport(t: "longpoll" | "callback" | "none"): void {
-    this.transports.push(t);
-  }
   markConnected(): void {
     this.connected++;
   }
@@ -44,24 +39,23 @@ class FakeStatus {
 function build(envOverrides: Record<string, string | undefined> = {}): {
   service: WebhookService;
   inbound: FakeInbound;
-  state: FakeState;
+  dedup: FakeDedup;
   status: FakeStatus;
 } {
   for (const [key, value] of Object.entries(envOverrides)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
-  reload();
 
   const inbound = new FakeInbound();
-  const state = new FakeState();
+  const dedup = new FakeDedup();
   const status = new FakeStatus();
   const service = new WebhookService(
     inbound as unknown as InboundService,
-    state as unknown as StateStore,
+    dedup as unknown as EventIdDedup,
     status as unknown as StatusRegistry,
   );
-  return { service, inbound, state, status };
+  return { service, inbound, dedup, status };
 }
 
 const messageNew: WebhookEnvelope = {
@@ -91,11 +85,10 @@ beforeEach(() => {
 });
 
 describe("WebhookService.handle", () => {
-  test("confirmation returns configured string and marks transport+connected", async () => {
+  test("confirmation returns configured string and marks connected", async () => {
     const { service, status } = build({ VK_WEBHOOK_CONFIRMATION: "abc123" });
     const out = await service.handle({ type: "confirmation" });
     expect(out).toBe("abc123");
-    expect(status.transports).toEqual(["callback"]);
     expect(status.connected).toBe(1);
   });
 
@@ -106,11 +99,11 @@ describe("WebhookService.handle", () => {
   });
 
   test("secret mismatch returns 'ok' and skips dispatch", async () => {
-    const { service, inbound, state } = build({ VK_WEBHOOK_SECRET: "expected" });
+    const { service, inbound, dedup } = build({ VK_WEBHOOK_SECRET: "expected" });
     const out = await service.handle({ ...messageNew, secret: "wrong" });
     expect(out).toBe("ok");
     expect(inbound.handled).toHaveLength(0);
-    expect(state.pushed).toHaveLength(0);
+    expect(dedup.pushed).toHaveLength(0);
   });
 
   test("matching secret allows dispatch", async () => {
@@ -119,29 +112,30 @@ describe("WebhookService.handle", () => {
     expect(inbound.handled).toHaveLength(1);
   });
 
-  test("new event_id triggers inbound.handle exactly once", async () => {
-    const { service, inbound, state, status } = build();
+  test("new event_id triggers inbound.handle exactly once and marks connected", async () => {
+    const { service, inbound, dedup, status } = build();
     await service.handle(messageNew);
     expect(inbound.handled).toHaveLength(1);
-    expect(state.pushed).toEqual(["evt-1"]);
+    expect(dedup.pushed).toEqual(["evt-1"]);
     expect(status.events).toBe(1);
+    expect(status.connected).toBe(1);
   });
 
   test("duplicate event_id is dropped", async () => {
-    const { service, inbound, state } = build();
+    const { service, inbound, dedup } = build();
     await service.handle(messageNew);
     await service.handle(messageNew);
     expect(inbound.handled).toHaveLength(1);
-    expect(state.pushed).toEqual(["evt-1", "evt-1"]);
+    expect(dedup.pushed).toEqual(["evt-1", "evt-1"]);
   });
 
   test("missing event_id still dispatches (no dedup)", async () => {
-    const { service, inbound, state } = build();
+    const { service, inbound, dedup } = build();
     const { event_id, ...withoutId } = messageNew;
     void event_id;
     await service.handle(withoutId);
     expect(inbound.handled).toHaveLength(1);
-    expect(state.pushed).toHaveLength(0);
+    expect(dedup.pushed).toHaveLength(0);
   });
 
   test("malformed message_new object returns 'ok' without dispatch", async () => {

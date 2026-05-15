@@ -1,18 +1,27 @@
 import { Elysia } from "elysia";
-import { bootstrapContainer } from "@/common/di";
+import { bootstrapContainer, container } from "@/common/di";
 import { logger } from "@/common/logger";
 import { errorMiddleware } from "@/common/middleware";
 import { swaggerPlugin } from "@/common/plugins";
 import { current as currentConfig } from "@/config";
 import { startMcpServer } from "@/mcp/server";
-import { accessController } from "@/modules/access";
-import { adminController } from "@/modules/admin";
-import { healthController } from "@/modules/health";
-import { inboundController, startInbound } from "@/modules/inbound";
+import { accessController } from "@/modules/access/access.controller";
+import { AccessStore } from "@/modules/access/access.store";
+import { adminController } from "@/modules/admin/admin.controller";
+import { healthController } from "@/modules/health/health.controller";
+import { inboundController } from "@/modules/inbound/inbound.controller";
+import { startInbound } from "@/modules/inbound/inbound.startup";
+import { UsersCache } from "@/modules/users/users.cache";
 
 bootstrapContainer();
+
+// Stores must be loaded before any tool resolves — tool handlers can hit them
+// at first call, and the MCP transport accepts requests as soon as it connects.
+await container.resolve(AccessStore).init();
+await container.resolve(UsersCache).init();
+
 const mcp = await startMcpServer();
-await startInbound(mcp);
+startInbound(mcp);
 
 const c = currentConfig();
 const app = new Elysia()
@@ -20,11 +29,8 @@ const app = new Elysia()
   .use(swaggerPlugin)
   .use(healthController)
   .use(adminController)
-  .use(accessController);
-
-if (c.transport === "callback") {
-  app.use(inboundController);
-}
+  .use(accessController)
+  .use(inboundController);
 
 app.listen({ port: c.port, hostname: c.httpBind }, ({ hostname, port }) => {
   logger.info({ hostname, port }, "elysia listening");

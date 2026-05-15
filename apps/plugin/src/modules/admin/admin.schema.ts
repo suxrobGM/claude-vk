@@ -5,10 +5,7 @@ import { NullableString } from "@/types/common.schema";
 export const ConfigResponseSchema = t.Object({
   port: t.Number(),
   http_bind: t.String(),
-  transport: t.String(),
-  locale: t.String(),
-  permission_relay: t.Boolean(),
-  state_dir: NullableString,
+  state_dir: t.String(),
   vk_community_id: NullableString,
   vk_community_screen_name: NullableString,
   vk_token: NullableString,
@@ -16,17 +13,15 @@ export const ConfigResponseSchema = t.Object({
   webhook_confirmation: NullableString,
 });
 
-/** Process-runtime status, merging in-process state with persisted long-poll cursor. */
+/** Process-runtime status snapshot. */
 export const StateResponseSchema = t.Object({
   runtime: t.Object({
     mcp_ready: t.Boolean(),
-    transport: t.String(),
     vk_connected: t.Boolean(),
     last_error: NullableString,
     last_error_at: NullableString,
     last_event_at: NullableString,
   }),
-  longpoll: t.Union([t.Object({ server: t.String(), key: t.String(), ts: t.String() }), t.Null()]),
   recent_messages_count: t.Integer(),
 });
 

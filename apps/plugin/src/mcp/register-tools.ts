@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { container } from "@/common/di";
-import { HistoryTools } from "@/modules/history";
-import { MessagingTools } from "@/modules/messaging";
-import { PingTools } from "@/modules/ping";
-import { UsersTools } from "@/modules/users";
+import { HistoryTools } from "@/modules/history/history.tools";
+import { MessagingTools } from "@/modules/messaging/messaging.tools";
+import { PingTools } from "@/modules/ping/ping.tools";
+import { UsersTools } from "@/modules/users/users.tools";
 
 /**
  * Single composition point for MCP tool registration. Each module owns a
