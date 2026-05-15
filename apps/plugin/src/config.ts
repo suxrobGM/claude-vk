@@ -7,6 +7,10 @@ export type Config = {
   locale: string;
   permissionRelay: boolean;
   stateDir: string | undefined;
+  vkToken: string | undefined;
+  vkCommunityId: string | undefined;
+  vkCommunityScreenName: string | undefined;
+  webhookSecret: string | undefined;
 };
 
 function build(): Config {
@@ -18,6 +22,10 @@ function build(): Config {
     locale: process.env.VK_LOCALE!,
     permissionRelay: process.env.VK_PERMISSION_RELAY === "true",
     stateDir: process.env.VK_STATE_DIR,
+    vkToken: process.env.VK_TOKEN,
+    vkCommunityId: process.env.VK_COMMUNITY_ID,
+    vkCommunityScreenName: process.env.VK_COMMUNITY_SCREEN_NAME,
+    webhookSecret: process.env.VK_WEBHOOK_SECRET,
   };
 }
 

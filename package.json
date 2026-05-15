@@ -9,8 +9,8 @@
   "scripts": {
     "start": "bun run --cwd apps/plugin --silent start",
     "dev": "bun run --cwd apps/plugin --silent dev",
-    "test": "bun test",
-    "typecheck": "bun --bun tsc -b",
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck",
     "prepare": "husky"
   },
   "lint-staged": {

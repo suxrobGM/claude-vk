@@ -10,15 +10,20 @@ export function isReady(): boolean {
   return ready;
 }
 
+/**
+ * Boots the MCP stdio server. The DI container must be bootstrapped (see
+ * `bootstrapContainer`) before this runs — every module's `register()` resolves
+ * its dependencies through the same container.
+ */
 export async function startMcpServer(): Promise<McpServer> {
   const server = new McpServer(
     { name: "vk", version: "0.1.0" },
     {
       capabilities: buildCapabilities(),
       instructions:
-        "VK channel plugin (M0 skeleton). Messages from VK will arrive as " +
-        '<channel source="vk" peer_id="..." from_id="..."> blocks once the ' +
-        "inbound transport lands in M2. Use the `ping` tool to verify connectivity.",
+        "VK channel plugin. Outbound tools (send_message, edit_message, " +
+        "delete_message) are available now. Inbound <channel> events from VK " +
+        "land in M2. Use the `ping` tool to verify connectivity without a token.",
     },
   );
 

@@ -1,10 +1,12 @@
 import { swagger } from "@elysiajs/swagger";
 import { Elysia } from "elysia";
+import { bootstrapContainer } from "@/common/di";
 import { logger } from "@/common/logger";
 import { current as currentConfig } from "@/config";
 import { startMcpServer } from "@/mcp/server";
 import { healthController } from "@/modules/health";
 
+bootstrapContainer();
 await startMcpServer();
 
 const c = currentConfig();

@@ -6,7 +6,9 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun", "reflect-metadata"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
