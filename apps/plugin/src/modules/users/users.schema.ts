@@ -32,7 +32,6 @@ export const PeersFileSchema = t.Object({
 
 export type PeersFile = Static<typeof PeersFileSchema>;
 export type UserEntry = Static<typeof UserEntrySchema>;
-export type GroupEntry = Static<typeof GroupEntrySchema>;
 
 export const PEERS_FILE_DEFAULTS: PeersFile = {
   version: 1,

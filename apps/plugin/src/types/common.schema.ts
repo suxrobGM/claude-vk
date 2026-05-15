@@ -1,4 +1,4 @@
-import { t, type Static } from "elysia";
+import { t } from "elysia";
 
 /**
  * Cross-module schema building blocks. Anything reused in two or more
@@ -28,6 +28,3 @@ export const SimpleErrorBodySchema = t.Object({
 
 /** `T | null` for response fields that may genuinely be absent. */
 export const NullableString = t.Union([t.String(), t.Null()]);
-
-export type SimpleErrorBody = Static<typeof SimpleErrorBodySchema>;
-export type OkResponse = Static<typeof OkResponseSchema>;

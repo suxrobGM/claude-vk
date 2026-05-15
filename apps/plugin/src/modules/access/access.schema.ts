@@ -1,9 +1,5 @@
 import { t, type Static } from "elysia";
-import {
-  NumericIdStringSchema,
-  OkResponseSchema,
-  SimpleErrorBodySchema,
-} from "@/types/common.schema";
+import { NumericIdStringSchema, OkResponseSchema } from "@/types/common.schema";
 
 /**
  * Persistent shape of `~/.claude/channels/vk/access.json`. The DM half is
@@ -164,11 +160,4 @@ export const ConsumePairingOkSchema = t.Composite([
 
 export const PendingPairingsResponseSchema = t.Object({
   pending: t.Array(t.Object({ code: t.String(), pair: PendingPairSchema })),
-});
-
-export const ErrorBodySchema = SimpleErrorBodySchema;
-
-export const ConsumePairingFailSchema = t.Object({
-  ok: t.Literal(false),
-  reason: t.String(),
 });
