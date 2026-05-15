@@ -1,4 +1,4 @@
-import { chmodSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { Value } from "@sinclair/typebox/value";
 import { parse } from "dotenv";
 import { t, type Static } from "elysia";
@@ -24,20 +24,17 @@ declare global {
 }
 
 /**
- * Merge the .env file under process.env (shell wins), validate against the
- * schema, write schema-declared defaults back to process.env so consumers can
- * read `process.env.VK_PORT!` without repeating `?? "6060"` at every call site.
- *
- * Throws on validation failure to prevent startup with invalid configuration.
+ * Merge `~/.claude/channels/vk/.env` under `process.env` (shell wins),
+ * validate the schema, and write declared defaults back so consumers can read
+ * `process.env.VK_PORT!` directly. Throws on validation failure.
  */
 export function validateEnv(): void {
-  const fileEnv = parse(envPath);
-  const merged: Record<string, string | undefined> = { ...fileEnv };
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) merged[key] = value;
+  const fileEnv = readEnvFile();
+  for (const [key, value] of Object.entries(fileEnv)) {
+    if (process.env[key] === undefined) process.env[key] = value;
   }
 
-  const converted = Value.Convert(EnvSchema, merged) as Record<string, unknown>;
+  const converted = Value.Convert(EnvSchema, { ...process.env }) as Record<string, unknown>;
   const defaults = Value.Default(EnvSchema, converted) as Record<string, unknown>;
   const errors = [...Value.Errors(EnvSchema, defaults)];
 
@@ -50,5 +47,14 @@ export function validateEnv(): void {
     if (value !== undefined && !process.env[key]) {
       process.env[key] = String(value);
     }
+  }
+}
+
+function readEnvFile(): Record<string, string> {
+  try {
+    return parse(readFileSync(envPath, "utf8"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw err;
   }
 }

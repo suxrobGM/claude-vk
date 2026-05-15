@@ -1,6 +1,5 @@
 import { singleton } from "tsyringe";
 import { StatusRegistry } from "@/common/status";
-import { current as currentConfig } from "@/config";
 import { isMcpReady } from "@/mcp/server";
 import { CommunityResolver } from "@/modules/access/community-resolver";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
@@ -18,14 +17,13 @@ export class AdminService {
 
   /** Effective config with `vk_token` collapsed to "***" when set. */
   getConfig(): ConfigResponse {
-    const c = currentConfig();
     const identity = this.community.get();
     return {
-      port: c.port,
+      port: Number(process.env.VK_PORT!),
       state_dir: stateDir,
       vk_community_id: identity?.id ?? null,
       vk_community_screen_name: identity?.screen_name ?? null,
-      vk_token: c.vkToken ? "***" : null,
+      vk_token: process.env.VK_TOKEN ? "***" : null,
     };
   }
 

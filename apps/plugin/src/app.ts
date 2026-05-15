@@ -1,9 +1,10 @@
+import "reflect-metadata";
 import { Elysia } from "elysia";
 import { bootstrapContainer, container } from "@/common/di";
 import { logger } from "@/common/logger";
 import { errorMiddleware } from "@/common/middleware";
 import { swaggerPlugin } from "@/common/plugins";
-import { current as currentConfig } from "@/config";
+import { validateEnv } from "@/env";
 import { startMcpServer } from "@/mcp/server";
 import { accessController } from "@/modules/access/access.controller";
 import { AccessStore } from "@/modules/access/access.store";
@@ -12,6 +13,7 @@ import { healthController } from "@/modules/health/health.controller";
 import { startInbound } from "@/modules/inbound/inbound.startup";
 import { UsersCache } from "@/modules/users/users.cache";
 
+validateEnv();
 bootstrapContainer();
 
 // Stores must be loaded before any tool resolves — tool handlers can hit them
@@ -22,7 +24,6 @@ await container.resolve(UsersCache).init();
 const mcp = await startMcpServer();
 startInbound(mcp);
 
-const c = currentConfig();
 const app = new Elysia()
   .use(errorMiddleware)
   .use(swaggerPlugin)
@@ -30,6 +31,6 @@ const app = new Elysia()
   .use(adminController)
   .use(accessController);
 
-app.listen({ port: c.port, hostname: "127.0.0.1" }, ({ hostname, port }) => {
+app.listen({ port: Number(process.env.VK_PORT!), hostname: "127.0.0.1" }, ({ hostname, port }) => {
   logger.info({ hostname, port }, "elysia listening");
 });

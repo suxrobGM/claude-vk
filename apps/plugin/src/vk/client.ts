@@ -1,7 +1,6 @@
 import { singleton } from "tsyringe";
 import { VK } from "vk-io";
 import { PluginError, VkApiError } from "@/common/errors";
-import { current } from "@/config";
 import type { VkApi } from "./api";
 import type {
   DeleteMessageParams,
@@ -201,7 +200,7 @@ export class VkClient implements VkApi {
 
   private getVk(): VK {
     if (this.vk) return this.vk;
-    const token = current().vkToken;
+    const token = process.env.VK_TOKEN;
     if (!token) {
       throw new PluginError(
         "vk_token_missing",

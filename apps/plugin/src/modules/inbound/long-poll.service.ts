@@ -3,7 +3,6 @@ import { VK } from "vk-io";
 import { logger } from "@/common/logger";
 import { StatusRegistry } from "@/common/status";
 import { sleep } from "@/common/utils";
-import { current as currentConfig } from "@/config";
 import { InboundService } from "./inbound.service";
 import { vkMessageToInbound, type VkMessage } from "./message-adapter";
 import type { ChannelNotifier } from "./notifier";
@@ -36,8 +35,8 @@ export class LongPollService {
 
   /** Begin polling. Returns once the loop is running (or has given up on auth). */
   async start(): Promise<void> {
-    const cfg = currentConfig();
-    if (!cfg.vkToken) {
+    const token = process.env.VK_TOKEN;
+    if (!token) {
       logger.warn("VK_TOKEN missing; long-poll will not start");
       this.status.markDisconnected("VK_TOKEN missing");
       void this.warn(
@@ -46,7 +45,7 @@ export class LongPollService {
       return;
     }
 
-    this.vk = new VK({ token: cfg.vkToken, apiVersion: VK_API_VERSION });
+    this.vk = new VK({ token, apiVersion: VK_API_VERSION });
     this.vk.updates.on("message_new", async (ctx) => {
       this.status.markEvent();
       try {
