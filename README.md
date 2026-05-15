@@ -1,8 +1,6 @@
 # claude-vk
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-%E2%89%A5%201.2-fbf0df)](https://bun.sh)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.81-7c3aed)](https://code.claude.com)
 [![Plugin version](https://img.shields.io/badge/plugin-v1.0.0-blue)](.claude-plugin/plugin.json)
 
 A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your Claude session. DMs and group chats become `<channel>` notifications; Claude gets MCP tools to send, edit, react, fetch history, search, and upload attachments. Permission-gated tool calls can be approved or denied from VK itself - useful when you're away from your terminal.
