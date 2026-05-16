@@ -9,19 +9,19 @@ import type { ChatEntry, GroupChatEntry, PendingPair } from "./schemas/access-fi
 import type { ChatKind, DmPolicy, MentionPolicy } from "./schemas/policy.schema";
 
 export interface ChatSummary {
-  peer_id: number;
+  peerId: number;
   kind: ChatKind;
   title: string | null;
-  sender_count: number;
-  added_at: string;
-  added_by: "pairing" | "manual";
+  senderCount: number;
+  addedAt: string;
+  addedBy: "pairing" | "manual";
 }
 
 export interface AddGroupInput {
-  peer_id: number;
+  peerId: number;
   title?: string;
   allow?: number[];
-  mention_policy?: MentionPolicy;
+  mentionPolicy?: MentionPolicy;
 }
 
 /**
@@ -39,23 +39,23 @@ export class AccessService {
     private readonly pendingGroups: PendingGroupsRegistry,
   ) {}
 
-  /** All allowed chats reduced to display summaries. DMs report `sender_count: 1` (the implicit DM peer). */
+  /** All allowed chats reduced to display summaries. DMs report `senderCount: 1` (the implicit DM peer). */
   listChats(): ChatSummary[] {
     const file = this.store.get();
-    return Object.entries(file.chats).map(([peer_id, chat]) => ({
-      peer_id: Number(peer_id),
+    return Object.entries(file.chats).map(([peerId, chat]) => ({
+      peerId: Number(peerId),
       kind: chat.kind,
       title: chat.title ?? null,
-      sender_count: chat.kind === "group_chat" ? chat.senders.length : 1,
-      added_at: chat.added_at,
-      added_by: chat.added_by,
+      senderCount: chat.kind === "group_chat" ? chat.senders.length : 1,
+      addedAt: chat.addedAt,
+      addedBy: chat.addedBy,
     }));
   }
 
   /** Full chat entry for one peer. Throws {@link NotFoundError} if not allowed. */
   getChat(peerId: string) {
     const chat = this.requireChat(peerId);
-    return { peer_id: Number(peerId), ...chat };
+    return { peerId: Number(peerId), ...chat };
   }
 
   /** Remove a chat entirely. Throws {@link NotFoundError} if not allowed. */
@@ -64,26 +64,26 @@ export class AccessService {
     await this.store.update((draft) => {
       delete draft.chats[peerId];
     });
-    return { peer_id: Number(peerId) };
+    return { peerId: Number(peerId) };
   }
 
   /** Sender ids for one group chat. Throws {@link NotFoundError} if unknown, {@link BadRequestError} for DMs (single implicit sender). */
   listSenders(peerId: string) {
     const chat = this.requireGroupChat(peerId);
-    return { peer_id: Number(peerId), senders: chat.senders.slice() };
+    return { peerId: Number(peerId), senders: chat.senders.slice() };
   }
 
   /**
-   * Add a sender by `user_id` or `screen_name` to a group chat. Idempotent.
+   * Add a sender by `userId` or `screenName` to a group chat. Idempotent.
    * Throws {@link NotFoundError} if the chat isn't allowed,
    * {@link BadRequestError} if the user can't be resolved or the chat is a DM.
    */
-  async addSender(peerId: string, input: { user_id?: number; screen_name?: string }) {
+  async addSender(peerId: string, input: { userId?: number; screenName?: string }) {
     this.requireGroupChat(peerId);
-    let userId: number | null = input.user_id ?? null;
+    let userId: number | null = input.userId ?? null;
 
-    if (!userId && input.screen_name) {
-      userId = await this.users.resolveScreenName(input.screen_name);
+    if (!userId && input.screenName) {
+      userId = await this.users.resolveScreenName(input.screenName);
     }
     if (!userId) {
       throw new BadRequestError("user-not-found");
@@ -92,12 +92,14 @@ export class AccessService {
 
     await this.store.update((draft) => {
       const chat = draft.chats[peerId];
-      if (chat?.kind !== "group_chat") return;
+      if (chat?.kind !== "group_chat") {
+        return;
+      }
       if (!chat.senders.includes(id)) {
         chat.senders.push(id);
       }
     });
-    return { peer_id: Number(peerId), user_id: id };
+    return { peerId: Number(peerId), userId: id };
   }
 
   /**
@@ -115,44 +117,48 @@ export class AccessService {
 
     await this.store.update((draft) => {
       const c = draft.chats[peerId];
-      if (c?.kind !== "group_chat") return;
+      if (c?.kind !== "group_chat") {
+        return;
+      }
       c.senders = c.senders.filter((s) => s !== userId);
     });
   }
 
-  /** Explicit group-chat registration. Idempotent. Throws {@link BadRequestError} if `peer_id` is not a group-chat id. */
+  /** Explicit group-chat registration. Idempotent. Throws {@link BadRequestError} if `peerId` is not a group-chat id. */
   async addGroup(input: AddGroupInput) {
-    if (!isGroupChat(input.peer_id)) {
+    if (!isGroupChat(input.peerId)) {
       throw new BadRequestError("not-a-group-chat-peer-id");
     }
 
-    const key = String(input.peer_id);
+    const key = String(input.peerId);
     const now = new Date().toISOString();
 
     const entry: ChatEntry = {
       kind: "group_chat",
       senders: input.allow ? Array.from(new Set(input.allow)) : [],
-      mention_policy: input.mention_policy ?? "mention_only",
-      added_at: now,
-      added_by: "manual",
+      mentionPolicy: input.mentionPolicy ?? "mention_only",
+      addedAt: now,
+      addedBy: "manual",
       ...(input.title ? { title: input.title } : {}),
     };
 
     await this.store.update((draft) => {
       draft.chats[key] = entry;
     });
-    this.pendingGroups.forget(input.peer_id);
-    return { peer_id: input.peer_id, chat: entry };
+    this.pendingGroups.forget(input.peerId);
+    return { peerId: input.peerId, chat: entry };
   }
 
-  /** Group-chat peer_ids the inbound gate dropped recently — operator hint. */
+  /** Group-chat peerIds the inbound gate dropped recently — operator hint. */
   listPendingGroups() {
     return this.pendingGroups.list();
   }
 
   private requireChat(peerId: string): ChatEntry {
     const chat = this.store.get().chats[peerId];
-    if (!chat) throw new NotFoundError("chat-not-allowed");
+    if (!chat) {
+      throw new NotFoundError("chat-not-allowed");
+    }
     return chat;
   }
 
@@ -166,13 +172,13 @@ export class AccessService {
 
   /** Read the DM policy. */
   getPolicies(): { dm: DmPolicy } {
-    return { dm: this.store.get().dm_policy };
+    return { dm: this.store.get().dmPolicy };
   }
 
   /** Set the DM policy. */
   async setDmPolicy(policy: DmPolicy) {
     await this.store.update((draft) => {
-      draft.dm_policy = policy;
+      draft.dmPolicy = policy;
     });
     return { dm: policy };
   }
@@ -184,12 +190,15 @@ export class AccessService {
    */
   async setMentionPolicy(peerId: string, policy: MentionPolicy) {
     this.requireGroupChat(peerId);
+
     await this.store.update((draft) => {
       const chat = draft.chats[peerId];
-      if (chat?.kind !== "group_chat") return;
-      chat.mention_policy = policy;
+      if (chat?.kind !== "group_chat") {
+        return;
+      }
+      chat.mentionPolicy = policy;
     });
-    return { peer_id: Number(peerId), policy };
+    return { peerId: Number(peerId), policy };
   }
 
   /**
@@ -199,7 +208,7 @@ export class AccessService {
   async consumePairing(code: string) {
     const result = await this.pairing.consume(code);
     if (!result.ok) throw new BadRequestError(result.reason);
-    return { peer_id: result.peer_id, chat: result.chat };
+    return { peerId: result.peerId, chat: result.chat };
   }
 
   /** Outstanding pairing codes (peer + expiry), for `/vk:status`. */

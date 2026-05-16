@@ -37,7 +37,7 @@ Without this step, `groups.getLongPollServer` returns no server URL and the plug
 
 ## 5. Privacy mode (group-chat operators only)
 
-For group chats, you generally want VK to deliver only mentions and replies-to-bot — not every message. Keep "Read all messages" **off** in the community's bot settings. The plugin's `mention_policy` is the second layer of the same filter; both off is the secure default.
+For group chats, you generally want VK to deliver only mentions and replies-to-bot — not every message. Keep "Read all messages" **off** in the community's bot settings. The plugin's `mentionPolicy` is the second layer of the same filter; both off is the secure default.
 
 ## 6. Install the plugin
 
@@ -91,7 +91,7 @@ Add the bot to a VK group chat, then opt the chat in by `peer_id` from Claude:
 /vk:access group add <peer_id>
 ```
 
-VK group-chat peer ids are `>= 2_000_000_000`. The chat now appears in `access.json` with `senders=[]` (anyone in the chat may write to the bot) and `mention_policy=mention_only`. Lock it down further with optional flags:
+VK group-chat peer ids are `>= 2_000_000_000`. The chat now appears in `access.json` with `senders=[]` (anyone in the chat may write to the bot) and `mentionPolicy=mention_only`. Lock it down further with optional flags:
 
 ```text
 /vk:access group add <peer_id> --allow id1,id2 --mention-policy reply_only

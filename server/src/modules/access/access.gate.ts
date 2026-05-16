@@ -17,7 +17,7 @@ export class AccessGate {
     const file = this.access.get();
 
     // `disabled` is a global kill switch — drops every inbound message, DM and group, even allowlisted ones.
-    if (file.dm_policy === "disabled") {
+    if (file.dmPolicy === "disabled") {
       return { kind: "drop", reason: "disabled" };
     }
 
@@ -27,7 +27,7 @@ export class AccessGate {
         return { kind: "drop", reason: "chat-not-allowed" };
       }
 
-      return file.dm_policy === "pairing"
+      return file.dmPolicy === "pairing"
         ? { kind: "need_pair" }
         : { kind: "deny_with_reply", reason: "chat-not-allowed" };
     }
@@ -37,14 +37,14 @@ export class AccessGate {
         return { kind: "drop", reason: "sender-not-allowed" };
       }
 
-      const mentionPolicy = chat.mention_policy ?? "mention_only";
+      const mentionPolicy = chat.mentionPolicy ?? "mention_only";
       if (mentionPolicy === "mention_only" && !msg.mentioned_bot) {
         return { kind: "drop", reason: "no-mention" };
       }
       if (mentionPolicy === "reply_only" && !msg.is_reply_to_bot) {
         return { kind: "drop", reason: "no-reply-to-bot" };
       }
-      // mention_policy === "all": fall through.
+      // mentionPolicy === "all": fall through.
     }
 
     return { kind: "allow" };

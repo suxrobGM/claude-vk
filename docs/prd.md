@@ -395,7 +395,7 @@ The plugin enforces this in `inbound/gate.ts`:
 
 1. **Chat layer.** Is this `peer_id` allowed at all? (DM peer or group chat in `access.json → chats`.) If not → drop silently.
 2. **Sender layer (group chats only).** Is `from_id` in the group chat's `senders` allowlist? DMs have one implicit sender (`peer_id == from_id`) so they skip this layer.
-3. **Activation layer (group chats only).** Per the chat's `mention_policy`: forward all messages, only `@`-mentions, or only replies-to-bot. Default `mention_only` to keep the chat quiet.
+3. **Activation layer (group chats only).** Per the chat's `mentionPolicy`: forward all messages, only `@`-mentions, or only replies-to-bot. Default `mention_only` to keep the chat quiet.
 
 Pseudocode:
 
@@ -406,7 +406,7 @@ if (chat.kind === "group_chat") {
   if (chat.senders.length > 0 && !chat.senders.includes(msg.from_id)) {
     return drop("sender-not-allowed");
   }
-  if (chat.mention_policy === "mention_only" && !msg.mentioned_bot) {
+  if (chat.mentionPolicy === "mention_only" && !msg.mentioned_bot) {
     return drop("no-mention");
   }
 }
@@ -477,7 +477,7 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
    ```
    /vk:access group add <peer_id>
    ```
-   Adds the chat to `access.json → chats` with `senders=[]` (anyone in the chat may write) and `mention_policy=mention_only`. Lock it down by passing `--allow id1,id2` and/or `--mention-policy {mention_only|all|reply_only}`. There is no group pairing flow.
+   Adds the chat to `access.json → chats` with `senders=[]` (anyone in the chat may write) and `mentionPolicy=mention_only`. Lock it down by passing `--allow id1,id2` and/or `--mention-policy {mention_only|all|reply_only}`. There is no group pairing flow.
 9. **Lock DMs down.**
 
    ```
@@ -496,7 +496,7 @@ A chat is either allowed or not. Group chats additionally carry a per-chat sende
 
 ### 11.1 Policies
 
-DMs have a `dm_policy` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`. The `disabled` value is a global kill switch and silences both DMs and group chats.
+DMs have a `dmPolicy` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`. The `disabled` value is a global kill switch and silences both DMs and group chats.
 
 | Policy      | Scope        | Behavior                                                                                                  |
 | ----------- | ------------ | --------------------------------------------------------------------------------------------------------- |
@@ -513,28 +513,28 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
 ```json
 {
   "version": 1,
-  "dm_policy": "allowlist",
+  "dmPolicy": "allowlist",
   "chats": {
     "123456": {
       "kind": "dm",
       "title": "Ivan Petrov",
-      "added_at": "2026-05-14T10:21:00Z",
-      "added_by": "pairing"
+      "addedAt": "2026-05-14T10:21:00Z",
+      "addedBy": "pairing"
     },
     "2000000042": {
       "kind": "group_chat",
       "title": "Team Standup",
       "senders": [123456, 234567, 345678],
-      "mention_policy": "mention_only",
-      "added_at": "2026-05-14T11:02:00Z",
-      "added_by": "manual"
+      "mentionPolicy": "mention_only",
+      "addedAt": "2026-05-14T11:02:00Z",
+      "addedBy": "manual"
     }
   },
-  "pending_pairs": {
+  "pendingPairs": {
     "x7k4mq": {
-      "peer_id": 999111,
-      "from_id": 999111,
-      "expires_at": "2026-05-14T11:30:00Z"
+      "peerId": 999111,
+      "fromId": 999111,
+      "expiresAt": "2026-05-14T11:30:00Z"
     }
   }
 }
@@ -544,8 +544,8 @@ Notes:
 
 - Keys under `chats` are stringified `peer_id`s. DM peers are user IDs (`< 2_000_000_000`); group chat peers are `≥ 2_000_000_000` (VK's convention).
 - `senders` (group chats only) is an array of VK user IDs. Empty means "any member of the chat may write." DM entries omit the field — a DM only ever has one sender.
-- `mention_policy` (group chats): `"mention_only"` (default), `"all"`, or `"reply_only"`. Controls activation, not access — a non-mention from an allowed sender is gated by activation policy and dropped silently when off.
-- `pending_pairs` is the live pairing-code table. TTL 10 min, single-use. Codes are 6 chars from a 32-char alphabet excluding `0/O/1/I/l`.
+- `mentionPolicy` (group chats): `"mention_only"` (default), `"all"`, or `"reply_only"`. Controls activation, not access — a non-mention from an allowed sender is gated by activation policy and dropped silently when off.
+- `pendingPairs` is the live pairing-code table. TTL 10 min, single-use. Codes are 6 chars from a 32-char alphabet excluding `0/O/1/I/l`.
 
 ### 11.3 Group-chat-specific behavior
 
@@ -681,11 +681,11 @@ To eventually launch with the unprefixed `--channels` flag, the plugin needs to 
 - ✅ **M1 — Outbound.** `send_message`, `edit_message`, `delete_message`. Manual peer ID. Token bucket limiter. JSON store skeleton.
 - ✅ **M2 — Inbound + DM.** Long-poll loop, normalizer, notifier writing `<channel>` blocks, attachment download. DM-only access gate.
 - ✅ **M3 — Access + JSON store.** Pairing flow, two-layer allowlist, `/vk:access` commands, hot reload on file change, atomic writes.
-- ✅ **M4 — Group chats.** `is_group_chat` detection, mention-detection, per-chat sender allowlist, `mention_policy`, group-chat pairing UX.
+- ✅ **M4 — Group chats.** `is_group_chat` detection, mention-detection, per-chat sender allowlist, `mentionPolicy`, group-chat pairing UX.
 - ✅ **M5 — Rich tools.** `react`, `mark_read`, `get_conversation_history`, `search_messages`, `get_user_info`, `upload_attachment`.
 - ✅ **M6 — Transport iteration.** Briefly swapped to Callback API for public-IP deploys, then reverted to Bots Long Poll as the sole transport — no public URL needed, simpler for the local-first install. `webhook.*`, `event-dedup`, and `inbound.controller` deleted.
 - ✅ **M7 — Permission relay.** `claude/channel/permission` capability, request handler, verdict regex in inbound, originating-user check, DM-only constraint. Always on.
-- 🚧 **M8 — Polish.** `README.md`, `ACCESS.md`, `/vk:status`, error UX, log rotation, Bun test suite for tools + access gate, allowlist-submission packaging.
+- ✅ **M8 — Polish.** `README.md`, `ACCESS.md`, `/vk:status`, error UX, log rotation, Bun test suite for tools + access gate, allowlist-submission packaging.
 - **v1 release.** All above.
 
 ---

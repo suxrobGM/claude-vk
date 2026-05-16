@@ -40,44 +40,44 @@ export const accessController = new Elysia({
     response: ChatsListResponseSchema,
     detail: { summary: "List allowed chats." },
   })
-  .get("/chats/:peer_id", ({ params }) => access.getChat(params.peer_id), {
+  .get("/chats/:peerId", ({ params }) => access.getChat(params.peerId), {
     params: PeerIdParamSchema,
     response: ChatDetailResponseSchema,
   })
   .delete(
-    "/chats/:peer_id",
+    "/chats/:peerId",
     async ({ params }) => {
-      const removed = await access.removeChat(params.peer_id);
+      const removed = await access.removeChat(params.peerId);
       return { ok: true as const, ...removed };
     },
     { params: PeerIdParamSchema, response: RemoveChatResponseSchema },
   )
-  .get("/chats/:peer_id/senders", ({ params }) => access.listSenders(params.peer_id), {
+  .get("/chats/:peerId/senders", ({ params }) => access.listSenders(params.peerId), {
     params: PeerIdParamSchema,
     response: SendersListResponseSchema,
   })
   .post(
-    "/chats/:peer_id/senders",
+    "/chats/:peerId/senders",
     async ({ params, body, set }) => {
-      const added = await access.addSender(params.peer_id, body);
-      set.headers["Location"] = `/access/chats/${params.peer_id}/senders/${added.user_id}`;
+      const added = await access.addSender(params.peerId, body);
+      set.headers["Location"] = `/access/chats/${params.peerId}/senders/${added.userId}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },
     { params: PeerIdParamSchema, body: AddSenderBodySchema, response: AddSenderResponseSchema },
   )
   .delete(
-    "/chats/:peer_id/senders/:user_id",
+    "/chats/:peerId/senders/:userId",
     async ({ params }) => {
-      await access.removeSender(params.peer_id, params.user_id);
+      await access.removeSender(params.peerId, params.userId);
       return { ok: true as const };
     },
     { params: PeerIdSenderParamSchema, response: RemoveResponseSchema },
   )
   .put(
-    "/chats/:peer_id/mention-policy",
+    "/chats/:peerId/mention-policy",
     async ({ params, body }) => {
-      const updated = await access.setMentionPolicy(params.peer_id, body.policy);
+      const updated = await access.setMentionPolicy(params.peerId, body.policy);
       return { ok: true as const, ...updated };
     },
     {
@@ -90,7 +90,7 @@ export const accessController = new Elysia({
     "/groups",
     async ({ body, set }) => {
       const added = await access.addGroup(body);
-      set.headers["Location"] = `/access/chats/${added.peer_id}`;
+      set.headers["Location"] = `/access/chats/${added.peerId}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },
@@ -122,6 +122,6 @@ export const accessController = new Elysia({
   .get("/groups/pending", () => ({ pending: access.listPendingGroups() }), {
     response: PendingGroupsResponseSchema,
     detail: {
-      summary: "Group-chat peer_ids the gate dropped recently — copy into /vk:access group add.",
+      summary: "Group-chat peerIds the gate dropped recently — copy into /vk:access group add.",
     },
   });

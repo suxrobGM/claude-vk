@@ -11,17 +11,17 @@ import type { ToolFailure } from "@/common/utils/tool-envelope";
 export const UserEntrySchema = t.Object({
   id: t.Integer(),
   name: t.String(),
-  screen_name: t.Optional(t.String()),
+  screenName: t.Optional(t.String()),
   photo: t.Optional(t.String()),
-  cached_at: t.String(),
+  cachedAt: t.String(),
 });
 
 export const GroupEntrySchema = t.Object({
   id: t.Integer(),
   name: t.String(),
-  screen_name: t.Optional(t.String()),
+  screenName: t.Optional(t.String()),
   photo: t.Optional(t.String()),
-  cached_at: t.String(),
+  cachedAt: t.String(),
 });
 
 export const PeersFileSchema = t.Object({

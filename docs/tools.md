@@ -108,7 +108,7 @@ Full-text search across the bound identity's conversations.
 
 ```jsonc
 { "user_ids": [123, 456, 789] }
-// success: { "ok": true, "users": [{ id, name, screen_name?, photo?, cached_at }, ...] }
+// success: { "ok": true, "users": [{ id, name, screenName?, photo?, cachedAt }, ...] }
 ```
 
 Up to 100 user IDs per call (VK's `users.get` cap). Backed by an in-memory + `peers.json` cache with a 1-hour TTL.

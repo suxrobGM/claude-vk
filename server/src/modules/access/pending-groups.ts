@@ -3,22 +3,22 @@ import { singleton } from "tsyringe";
 const MAX_ENTRIES = 20;
 
 export interface PendingGroup {
-  peer_id: number;
-  first_seen: string;
-  last_seen: string;
-  hit_count: number;
-  sample_from_id: number;
-  sample_text: string;
+  peerId: number;
+  firstSeen: string;
+  lastSeen: string;
+  hitCount: number;
+  sampleFromId: number;
+  sampleText: string;
 }
 
 interface RecordPendingGroupInput {
-  peer_id: number;
-  from_id: number;
+  peerId: number;
+  fromId: number;
   text: string;
 }
 
 /**
- * Tracks group-chat `peer_id`s the gate dropped as `chat-not-allowed` so the
+ * Tracks group-chat `peerId`s the gate dropped as `chat-not-allowed` so the
  * operator can copy the right number into `/vk:access group add` without
  * digging through logs. VK peer_ids are context-relative — the URL-bar number
  * a user sees differs from what the community's Long Poll delivers.
@@ -29,17 +29,17 @@ export class PendingGroupsRegistry {
 
   record(input: RecordPendingGroupInput): void {
     const now = new Date().toISOString();
-    const existing = this.entries.get(input.peer_id);
+    const existing = this.entries.get(input.peerId);
 
     if (existing) {
-      existing.last_seen = now;
-      existing.hit_count += 1;
+      existing.lastSeen = now;
+      existing.hitCount += 1;
       return;
     }
 
     if (this.entries.size >= MAX_ENTRIES) {
       const oldest = [...this.entries.entries()].sort((a, b) =>
-        a[1].last_seen.localeCompare(b[1].last_seen),
+        a[1].lastSeen.localeCompare(b[1].lastSeen),
       )[0];
 
       if (oldest) {
@@ -47,13 +47,13 @@ export class PendingGroupsRegistry {
       }
     }
 
-    this.entries.set(input.peer_id, {
-      peer_id: input.peer_id,
-      first_seen: now,
-      last_seen: now,
-      hit_count: 1,
-      sample_from_id: input.from_id,
-      sample_text: input.text.slice(0, 80),
+    this.entries.set(input.peerId, {
+      peerId: input.peerId,
+      firstSeen: now,
+      lastSeen: now,
+      hitCount: 1,
+      sampleFromId: input.fromId,
+      sampleText: input.text.slice(0, 80),
     });
   }
 
@@ -64,6 +64,6 @@ export class PendingGroupsRegistry {
 
   /** Most-recent first. */
   list(): PendingGroup[] {
-    return [...this.entries.values()].sort((a, b) => b.last_seen.localeCompare(a.last_seen));
+    return [...this.entries.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
   }
 }

@@ -5,7 +5,7 @@
 Run `/vk:status` — it aggregates `/healthz`, `/state`, `/access/*` into one block. The two fields that matter most:
 
 - `connected` — is the long-poll loop running?
-- `last_error` — most recent failure recorded by the loop, if any.
+- `lastError` — most recent failure recorded by the loop, if any.
 
 If `/vk:status` itself errors out, the plugin isn't running. Relaunch:
 
@@ -17,13 +17,13 @@ If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/heal
 
 ## Common symptoms
 
-### `connected: false`, `last_error: "VK_TOKEN missing"`
+### `connected: false`, `lastError: "VK_TOKEN missing"`
 
 The plugin booted, found no token, and parked. Run `/vk:configure <token>` and restart your Claude session. The long-poll loop only resolves config at startup.
 
 You should also see this as a `<channel severity="warning">` message in Claude on first launch — that's the same diagnosis pushed through the channel.
 
-### `connected: false`, `last_error` starts with `vk_api_5`
+### `connected: false`, `lastError` starts with `vk_api_5`
 
 VK rejected the access token. Causes (most common first):
 
@@ -33,7 +33,7 @@ VK rejected the access token. Causes (most common first):
 
 Fix: vk.com -> Manage -> API usage -> Access tokens -> generate a new one with the right scopes -> `/vk:configure <new-token>` -> restart.
 
-### `connected: false`, `last_error: "start failed (attempt N)"`
+### `connected: false`, `lastError: "start failed (attempt N)"`
 
 The plugin couldn't reach VK's long-poll server. Causes:
 
@@ -47,8 +47,8 @@ Walk through these in order:
 
 1. **Is the chat allowlisted?** `/vk:access list` should show its `peer_id`. If not, opt the group in: `/vk:access group add <peer_id>` (group chats no longer pair — they have to be added explicitly by `peer_id`).
 2. **Is your user listed for that chat?** `/vk:access list <peer_id>`. Add yourself: `/vk:access add-sender <peer_id> <your_user_id>`.
-3. **Is the message activating the chat?** Default `mention_policy` is `mention_only` — the bot ignores everything that isn't `@<community>` or a reply to one of its own messages. Mention it explicitly, or change policy: `/vk:access mention-policy <peer_id> all`.
-4. **Is privacy mode hiding the message from VK?** In community settings, "Read all messages" off means VK only delivers mentions and replies. That's fine if your `mention_policy` agrees, but if you want everything, turn it on.
+3. **Is the message activating the chat?** Default `mentionPolicy` is `mention_only` — the bot ignores everything that isn't `@<community>` or a reply to one of its own messages. Mention it explicitly, or change policy: `/vk:access mention-policy <peer_id> all`.
+4. **Is privacy mode hiding the message from VK?** In community settings, "Read all messages" off means VK only delivers mentions and replies. That's fine if your `mentionPolicy` agrees, but if you want everything, turn it on.
 
 ### Pairing code never arrives
 

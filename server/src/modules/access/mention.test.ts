@@ -18,7 +18,7 @@ function makeDetector(recent: RecentSentMessages): MentionDetector {
   // Seed the resolver's identity directly — bypasses the VK call.
   const stubVk = {} as unknown as VkClient;
   const resolver = new CommunityResolver(stubVk);
-  const identity: CommunityIdentity = { id: "12345", screen_name: "claudebot" };
+  const identity: CommunityIdentity = { id: "12345", screenName: "claudebot" };
   (resolver as unknown as { identity: CommunityIdentity }).identity = identity;
   return new MentionDetector(recent, resolver);
 }

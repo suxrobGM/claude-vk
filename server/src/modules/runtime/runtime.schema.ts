@@ -4,21 +4,21 @@ import { NullableString } from "@/types/common.schema";
 /** Sanitized snapshot of effective configuration — secrets are redacted. */
 export const ConfigResponseSchema = t.Object({
   port: t.Number(),
-  vk_community_id: NullableString,
-  vk_community_screen_name: NullableString,
-  vk_token: NullableString,
+  vkCommunityId: NullableString,
+  vkCommunityScreenName: NullableString,
+  vkToken: NullableString,
 });
 
 /** Process-runtime status snapshot. */
 export const StateResponseSchema = t.Object({
   runtime: t.Object({
-    mcp_ready: t.Boolean(),
-    vk_connected: t.Boolean(),
-    last_error: NullableString,
-    last_error_at: NullableString,
-    last_event_at: NullableString,
+    mcpReady: t.Boolean(),
+    vkConnected: t.Boolean(),
+    lastError: NullableString,
+    lastErrorAt: NullableString,
+    lastEventAt: NullableString,
   }),
-  recent_messages_count: t.Integer(),
+  recentMessagesCount: t.Integer(),
 });
 
 export type ConfigResponse = Static<typeof ConfigResponseSchema>;

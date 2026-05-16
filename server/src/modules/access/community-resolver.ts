@@ -4,7 +4,7 @@ import { VkClient } from "@/vk/client";
 
 export interface CommunityIdentity {
   id: string;
-  screen_name: string | undefined;
+  screenName: string | undefined;
 }
 
 /**
@@ -31,9 +31,9 @@ export class CommunityResolver {
     this.inflight = (async () => {
       try {
         const self = await this.vk.groupsGetSelf();
-        this.identity = { id: String(self.id), screen_name: self.screen_name };
+        this.identity = { id: String(self.id), screenName: self.screen_name };
         logger.info(
-          { id: this.identity.id, screen_name: this.identity.screen_name },
+          { id: this.identity.id, screen_name: this.identity.screenName },
           "community identity resolved from groups.getById",
         );
       } catch (err) {

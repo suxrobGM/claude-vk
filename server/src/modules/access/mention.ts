@@ -40,7 +40,7 @@ export class MentionDetector {
   detect(msg: InboundMessage): MentionSignals {
     const identity = this.community.get();
     const communityId = identity?.id;
-    const screenName = identity?.screen_name?.toLowerCase();
+    const screenName = identity?.screenName?.toLowerCase();
 
     const signals: MentionSignals = {
       name_mention: this.hasNameMention(msg.text, communityId, screenName),

@@ -4,17 +4,17 @@ import { ChatEntrySchema, PendingPairSchema } from "./access-file.schema";
 import { ChatKindSchema, DmPolicySchema, MentionPolicySchema } from "./policy.schema";
 
 export const PeerIdParamSchema = t.Object({
-  peer_id: NumericIdStringSchema,
+  peerId: NumericIdStringSchema,
 });
 
 export const PeerIdSenderParamSchema = t.Object({
-  peer_id: NumericIdStringSchema,
-  user_id: NumericIdStringSchema,
+  peerId: NumericIdStringSchema,
+  userId: NumericIdStringSchema,
 });
 
 export const AddSenderBodySchema = t.Object({
-  user_id: t.Optional(t.Integer()),
-  screen_name: t.Optional(t.String({ minLength: 1 })),
+  userId: t.Optional(t.Integer()),
+  screenName: t.Optional(t.String({ minLength: 1 })),
 });
 
 export const SetPolicyBodySchema = t.Object({
@@ -30,19 +30,19 @@ export const ConsumePairingBodySchema = t.Object({
 });
 
 export const AddGroupBodySchema = t.Object({
-  peer_id: t.Integer(),
+  peerId: t.Integer(),
   title: t.Optional(t.String({ minLength: 1 })),
   allow: t.Optional(t.Array(t.Integer())),
-  mention_policy: t.Optional(MentionPolicySchema),
+  mentionPolicy: t.Optional(MentionPolicySchema),
 });
 
 export const ChatSummarySchema = t.Object({
-  peer_id: t.Integer(),
+  peerId: t.Integer(),
   kind: ChatKindSchema,
   title: t.Union([t.String(), t.Null()]),
-  sender_count: t.Integer(),
-  added_at: t.String(),
-  added_by: t.Union([t.Literal("pairing"), t.Literal("manual")]),
+  senderCount: t.Integer(),
+  addedAt: t.String(),
+  addedBy: t.Union([t.Literal("pairing"), t.Literal("manual")]),
 });
 
 export const ChatsListResponseSchema = t.Object({
@@ -50,25 +50,25 @@ export const ChatsListResponseSchema = t.Object({
 });
 
 export const ChatDetailResponseSchema = t.Intersect([
-  t.Object({ peer_id: t.Integer() }),
+  t.Object({ peerId: t.Integer() }),
   ChatEntrySchema,
 ]);
 
 export const SendersListResponseSchema = t.Object({
-  peer_id: t.Integer(),
+  peerId: t.Integer(),
   senders: t.Array(t.Integer()),
 });
 
 export const AddSenderResponseSchema = t.Composite([
   OkResponseSchema,
-  t.Object({ peer_id: t.Integer(), user_id: t.Integer() }),
+  t.Object({ peerId: t.Integer(), userId: t.Integer() }),
 ]);
 
 export const RemoveResponseSchema = OkResponseSchema;
 
 export const RemoveChatResponseSchema = t.Composite([
   OkResponseSchema,
-  t.Object({ peer_id: t.Integer() }),
+  t.Object({ peerId: t.Integer() }),
 ]);
 
 export const PoliciesResponseSchema = t.Object({
@@ -83,19 +83,19 @@ export const SetPolicyResponseSchema = t.Composite([
 export const SetMentionPolicyResponseSchema = t.Composite([
   OkResponseSchema,
   t.Object({
-    peer_id: t.Integer(),
+    peerId: t.Integer(),
     policy: MentionPolicySchema,
   }),
 ]);
 
 export const ConsumePairingOkSchema = t.Composite([
   OkResponseSchema,
-  t.Object({ peer_id: t.Integer(), chat: ChatEntrySchema }),
+  t.Object({ peerId: t.Integer(), chat: ChatEntrySchema }),
 ]);
 
 export const AddGroupResponseSchema = t.Composite([
   OkResponseSchema,
-  t.Object({ peer_id: t.Integer(), chat: ChatEntrySchema }),
+  t.Object({ peerId: t.Integer(), chat: ChatEntrySchema }),
 ]);
 
 export const PendingPairingsResponseSchema = t.Object({
@@ -103,12 +103,12 @@ export const PendingPairingsResponseSchema = t.Object({
 });
 
 export const PendingGroupSchema = t.Object({
-  peer_id: t.Integer(),
-  first_seen: t.String(),
-  last_seen: t.String(),
-  hit_count: t.Integer(),
-  sample_from_id: t.Integer(),
-  sample_text: t.String(),
+  peerId: t.Integer(),
+  firstSeen: t.String(),
+  lastSeen: t.String(),
+  hitCount: t.Integer(),
+  sampleFromId: t.Integer(),
+  sampleText: t.String(),
 });
 
 export const PendingGroupsResponseSchema = t.Object({

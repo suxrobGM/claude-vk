@@ -14,22 +14,22 @@ export class RuntimeService {
     private readonly community: CommunityResolver,
   ) {}
 
-  /** Effective config with `vk_token` collapsed to "***" when set. */
+  /** Effective config with `vkToken` collapsed to "***" when set. */
   getConfig(): ConfigResponse {
     const identity = this.community.get();
     return {
       port: Number(process.env.PORT!),
-      vk_community_id: identity?.id ?? null,
-      vk_community_screen_name: identity?.screen_name ?? null,
-      vk_token: process.env.VK_TOKEN ? "***" : null,
+      vkCommunityId: identity?.id ?? null,
+      vkCommunityScreenName: identity?.screenName ?? null,
+      vkToken: process.env.VK_TOKEN ? "***" : null,
     };
   }
 
   /** Process-runtime snapshot, including MCP readiness. */
   getState(): StateResponse {
     return {
-      runtime: { mcp_ready: isMcpReady(), ...this.status.get() },
-      recent_messages_count: this.recent.size(),
+      runtime: { mcpReady: isMcpReady(), ...this.status.get() },
+      recentMessagesCount: this.recent.size(),
     };
   }
 }

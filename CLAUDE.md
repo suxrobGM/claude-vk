@@ -6,7 +6,7 @@
 
 Inbound transport is **VK Bots Long Poll only** — no public URL, no reverse proxy. `vk-io`'s `updates.start()` owns the poll cursor (`ts`), retries, and key-expired refresh; we wrap it with a connect-backoff loop and a `message_new` handler.
 
-PRD: [docs/prd.md](docs/prd.md) — source of truth. M0–M7 shipped; M8 polish in progress.
+PRD: [docs/prd.md](docs/prd.md) — source of truth.
 
 ## Commands
 
@@ -43,12 +43,12 @@ The user only configures **`VK_TOKEN`** and optionally **`PORT`** / **`LOG_LEVEL
 
 Two persistent files only — both under `~/.claude/channels/vk/` (path fixed at install time):
 
-- `access.json` — `dm_policy`, chats (DM + group-chat union), group-chat senders + mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
+- `access.json` — `dmPolicy`, chats (DM + group-chat union), group-chat senders + mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
 - `peers.json` — VK user/group metadata cache (TTL 1h, LRU 10k).
 
 **Access + mention.** Gate in [access/access.gate.ts](server/src/modules/access/access.gate.ts): chat allowlist → (group chats only) per-chat senders + mention-policy. Gate on **`from_id`, not `peer_id`** (PRD §9.4). DMs have one implicit sender (`peer_id == from_id`) so they skip the sender layer. Mention signals in [access/mention.ts](server/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved).
 
-Policies: only DMs have one (`dm_policy` = `pairing` (default) or `allowlist`). Group chats are off by default and opt in by `peer_id` via `POST /access/groups` (`/vk:access group add`); they have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
+Policies: only DMs have one (`dmPolicy` = `pairing` (default) or `allowlist`). Group chats are off by default and opt in by `peerId` via `POST /access/groups` (`/vk:access group add`); they have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
 
 **Inbound.** [inbound/long-poll.service.ts](server/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` — auto-resolves the bound group ID, owns the poll cursor + key-expired refresh. We layer on a connect-backoff loop (1s→30s, code 5 fatal) and a `message_new` handler that converts via [`vkMessageToInbound`](server/src/modules/inbound/message-adapter.ts) and dispatches into [`InboundService.handle`](server/src/modules/inbound/inbound.service.ts). Pipeline: `mention enrich → gate → (drop | DM pair | permission verdict | download + notify)`. Only DMs ever reach `need_pair`; group chats are silently dropped until added. Never throws — every failure is logged and the poll loop continues. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
 

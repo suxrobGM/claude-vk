@@ -64,8 +64,8 @@ export class InboundService {
       if (verdict.kind === "drop") {
         if (msg.is_group_chat && verdict.reason === "chat-not-allowed") {
           this.pendingGroups.record({
-            peer_id: msg.peer_id,
-            from_id: msg.from_id,
+            peerId: msg.peer_id,
+            fromId: msg.from_id,
             text: msg.text,
           });
         }

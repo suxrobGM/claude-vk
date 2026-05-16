@@ -36,14 +36,15 @@ export class UsersCache {
     if (this.store) {
       return;
     }
+
     this.store = await JsonStore.create<PeersFile>({
       path: peersPath,
       schema: PeersFileSchema,
       defaults: PEERS_FILE_DEFAULTS,
     });
     for (const [, entry] of Object.entries(this.store.get().users)) {
-      if (entry.screen_name) {
-        this.screenToId.set(entry.screen_name.toLowerCase(), entry.id);
+      if (entry.screenName) {
+        this.screenToId.set(entry.screenName.toLowerCase(), entry.id);
       }
     }
   }
@@ -63,19 +64,22 @@ export class UsersCache {
     if (cached && !isStale(cached)) {
       return cached;
     }
+
     const fetched = await this.fetchOne(userId);
+
     if (fetched) {
       return fetched;
     }
     return cached;
   }
 
-  /** Resolve a `screen_name` (with or without leading `@`) to a user_id. */
+  /** Resolve a `screenName` (with or without leading `@`) to a user_id. */
   async resolveScreenName(screenName: string): Promise<number | null> {
     const key = screenName.replace(/^@/, "").toLowerCase();
     if (!key) {
       return null;
     }
+
     const cached = this.screenToId.get(key);
     if (cached != null) {
       return cached;
@@ -107,9 +111,9 @@ export class UsersCache {
       const entry: UserEntry = {
         id: u.id,
         name: [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || `user_${u.id}`,
-        screen_name: u.screen_name,
+        screenName: u.screen_name,
         photo: u.photo_100,
-        cached_at: new Date().toISOString(),
+        cachedAt: new Date().toISOString(),
       };
 
       await this.persist(entry);
@@ -125,8 +129,9 @@ export class UsersCache {
       draft.users[String(entry.id)] = entry;
       evictIfNeeded(draft.users);
     });
-    if (entry.screen_name) {
-      this.screenToId.set(entry.screen_name.toLowerCase(), entry.id);
+
+    if (entry.screenName) {
+      this.screenToId.set(entry.screenName.toLowerCase(), entry.id);
     }
   }
 
@@ -139,7 +144,7 @@ export class UsersCache {
 }
 
 function isStale(entry: UserEntry): boolean {
-  return Date.now() - Date.parse(entry.cached_at) > TTL_MS;
+  return Date.now() - Date.parse(entry.cachedAt) > TTL_MS;
 }
 
 function evictIfNeeded(users: Record<string, UserEntry>): void {
@@ -151,9 +156,9 @@ function evictIfNeeded(users: Record<string, UserEntry>): void {
     return;
   }
 
-  // Drop the oldest entries by cached_at until we're under the cap.
+  // Drop the oldest entries by cachedAt until we're under the cap.
   const sorted = Object.entries(users).sort(
-    ([, a], [, b]) => Date.parse(a.cached_at) - Date.parse(b.cached_at),
+    ([, a], [, b]) => Date.parse(a.cachedAt) - Date.parse(b.cachedAt),
   );
 
   const dropCount = count - LRU_LIMIT;

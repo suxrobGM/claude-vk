@@ -46,6 +46,7 @@ export class LongPollService {
     }
 
     this.vk = new VK({ token, apiVersion: VK_API_VERSION });
+
     this.vk.updates.on("message_new", async (ctx) => {
       this.status.markEvent();
       try {
@@ -94,12 +95,14 @@ export class LongPollService {
         const delay = BACKOFF_SCHEDULE_MS[Math.min(attempt, BACKOFF_SCHEDULE_MS.length - 1)]!;
         logger.warn({ attempt, delay, err }, "long-poll start failed; backing off");
         this.status.markDisconnected(`start failed (attempt ${attempt + 1})`);
+
         if (attempt + 1 === SUSTAINED_BACKOFF_ATTEMPTS && !this.sustainedWarningSent) {
           this.sustainedWarningSent = true;
           void this.warn(
             "VK Long Poll has not connected after 3 attempts. Verify Long Poll API is enabled in the community admin (Manage → API usage → Long Poll API, version ≥ 5.199, `message_new` checked) and that the host has outbound HTTPS access.",
           );
         }
+
         await sleep(delay);
         attempt++;
       }
@@ -108,7 +111,10 @@ export class LongPollService {
 
   private async warn(message: string): Promise<void> {
     const notifier = this.notifier;
-    if (!notifier) return;
+    if (!notifier) {
+      return;
+    }
+
     try {
       await notifier.warn(message);
     } catch (err) {
@@ -118,7 +124,9 @@ export class LongPollService {
 }
 
 function vkErrorCode(err: unknown): number | null {
-  if (typeof err !== "object" || err === null) return null;
+  if (typeof err !== "object" || err === null) {
+    return null;
+  }
   const c = (err as { code?: unknown }).code;
   return typeof c === "number" ? c : null;
 }

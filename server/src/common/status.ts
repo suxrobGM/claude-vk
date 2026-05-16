@@ -1,10 +1,10 @@
 import { singleton } from "tsyringe";
 
 export interface RuntimeStatus {
-  vk_connected: boolean;
-  last_error: string | null;
-  last_error_at: string | null;
-  last_event_at: string | null;
+  vkConnected: boolean;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  lastEventAt: string | null;
 }
 
 /**
@@ -15,10 +15,10 @@ export interface RuntimeStatus {
 @singleton()
 export class StatusRegistry {
   private status: RuntimeStatus = {
-    vk_connected: false,
-    last_error: null,
-    last_error_at: null,
-    last_event_at: null,
+    vkConnected: false,
+    lastError: null,
+    lastErrorAt: null,
+    lastEventAt: null,
   };
 
   /** Read the current runtime status snapshot. */
@@ -30,9 +30,9 @@ export class StatusRegistry {
   markConnected(): void {
     this.status = {
       ...this.status,
-      vk_connected: true,
-      last_error: null,
-      last_error_at: null,
+      vkConnected: true,
+      lastError: null,
+      lastErrorAt: null,
     };
   }
 
@@ -40,14 +40,14 @@ export class StatusRegistry {
   markDisconnected(error: string): void {
     this.status = {
       ...this.status,
-      vk_connected: false,
-      last_error: error,
-      last_error_at: new Date().toISOString(),
+      vkConnected: false,
+      lastError: error,
+      lastErrorAt: new Date().toISOString(),
     };
   }
 
-  /** Stamp `last_event_at` to now. Called on every successful inbound delivery. */
+  /** Stamp `lastEventAt` to now. Called on every successful inbound delivery. */
   markEvent(): void {
-    this.status = { ...this.status, last_event_at: new Date().toISOString() };
+    this.status = { ...this.status, lastEventAt: new Date().toISOString() };
   }
 }

@@ -36,14 +36,14 @@ describe("AccessGate.check", () => {
   });
 
   it("denies unknown DM peer under allowlist policy with a reply", () => {
-    const gate = new AccessGate(makeStore({ ...ACCESS_FILE_DEFAULTS, dm_policy: "allowlist" }));
+    const gate = new AccessGate(makeStore({ ...ACCESS_FILE_DEFAULTS, dmPolicy: "allowlist" }));
     const r = gate.check(makeMsg());
     expect(r.kind).toBe("deny_with_reply");
     if (r.kind === "deny_with_reply") expect(r.reason).toBe("chat-not-allowed");
   });
 
   it("silently drops unknown group-chat peer under allowlist policy", () => {
-    const gate = new AccessGate(makeStore({ ...ACCESS_FILE_DEFAULTS, dm_policy: "pairing" }));
+    const gate = new AccessGate(makeStore({ ...ACCESS_FILE_DEFAULTS, dmPolicy: "pairing" }));
     const r = gate.check(makeMsg({ peer_id: GROUP_PEER, is_group_chat: true }));
     expect(r.kind).toBe("drop");
     if (r.kind === "drop") expect(r.reason).toBe("chat-not-allowed");
@@ -53,12 +53,12 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "allowlist",
+        dmPolicy: "allowlist",
         chats: {
           "100": {
             kind: "dm",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -70,14 +70,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [200],
-            mention_policy: "all",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "all",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -91,14 +91,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "mention_only",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "mention_only",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -114,14 +114,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "mention_only",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "mention_only",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -137,14 +137,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "reply_only",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "reply_only",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -166,14 +166,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "reply_only",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "reply_only",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -190,18 +190,18 @@ describe("AccessGate.check", () => {
     ).toBe("allow");
   });
 
-  it("allows any message under mention_policy=all", () => {
+  it("allows any message under mentionPolicy=all", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "all",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "all",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -215,14 +215,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [], // explicit `group add` may leave this empty
-            mention_policy: "all",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "all",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -232,18 +232,18 @@ describe("AccessGate.check", () => {
     ).toBe("allow");
   });
 
-  it("still applies mention_policy when senders[] is empty", () => {
+  it("still applies mentionPolicy when senders[] is empty", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [],
-            mention_policy: "mention_only",
-            added_at: new Date().toISOString(),
-            added_by: "pairing",
+            mentionPolicy: "mention_only",
+            addedAt: new Date().toISOString(),
+            addedBy: "pairing",
           },
         },
       }),
@@ -259,12 +259,12 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "disabled",
+        dmPolicy: "disabled",
         chats: {
           "100": {
             kind: "dm",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -278,14 +278,14 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "disabled",
+        dmPolicy: "disabled",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            mention_policy: "all",
-            added_at: new Date().toISOString(),
-            added_by: "manual",
+            mentionPolicy: "all",
+            addedAt: new Date().toISOString(),
+            addedBy: "manual",
           },
         },
       }),
@@ -295,17 +295,17 @@ describe("AccessGate.check", () => {
     if (r.kind === "drop") expect(r.reason).toBe("disabled");
   });
 
-  it("defaults to mention_only when chat has no mention_policy set", () => {
+  it("defaults to mention_only when chat has no mentionPolicy set", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        dm_policy: "pairing",
+        dmPolicy: "pairing",
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
             senders: [555],
-            added_at: new Date().toISOString(),
-            added_by: "pairing",
+            addedAt: new Date().toISOString(),
+            addedBy: "pairing",
           },
         },
       }),
