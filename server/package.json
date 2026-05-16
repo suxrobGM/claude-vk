@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun run src/app.ts",
     "dev": "bun run --watch src/app.ts",
-    "build": "NODE_ENV=production bun build src/app.ts --target=bun --outfile=../dist/server.js --external pino-pretty",
+    "build": "bun build src/app.ts --target=bun --outfile=../dist/server.js --external pino-pretty --define process.env.NODE_ENV='\"production\"'",
     "test": "bun test",
     "typecheck": "bun --bun tsc --noEmit"
   },

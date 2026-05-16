@@ -1,4 +1,5 @@
 import { singleton } from "tsyringe";
+import { logger } from "@/common/logger";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
 import { CommunityResolver } from "./community-resolver";
@@ -41,11 +42,26 @@ export class MentionDetector {
     const communityId = identity?.id;
     const screenName = identity?.screen_name?.toLowerCase();
 
-    return {
+    const signals: MentionSignals = {
       name_mention: this.hasNameMention(msg.text, communityId, screenName),
       reply_to_bot: this.isReplyToBot(msg.peer_id, msg.reply_to),
       keyboard_payload: false,
     };
+
+    logger.info(
+      {
+        peer_id: msg.peer_id,
+        text: msg.text,
+        community_id: communityId,
+        screen_name: screenName,
+        identity_resolved: identity !== null,
+        name_mention: signals.name_mention,
+        reply_to_bot: signals.reply_to_bot,
+      },
+      "mention detect",
+    );
+
+    return signals;
   }
 
   private hasNameMention(

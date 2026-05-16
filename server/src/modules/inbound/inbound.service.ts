@@ -43,13 +43,39 @@ export class InboundService {
   /** Run the inbound pipeline for a single normalized VK message. Never throws. */
   async handle(msg: InboundMessage): Promise<void> {
     try {
+      logger.info(
+        {
+          peer_id: msg.peer_id,
+          from_id: msg.from_id,
+          is_group_chat: msg.is_group_chat,
+          text: msg.text,
+          reply_to: msg.reply_to,
+          attachments: msg.attachments.length,
+        },
+        "inbound message received",
+      );
+
       const signals = this.mentions.detect(msg);
       msg.mentioned_bot = signals.name_mention || signals.reply_to_bot || signals.keyboard_payload;
       msg.is_reply_to_bot = signals.reply_to_bot;
 
+      logger.info(
+        {
+          peer_id: msg.peer_id,
+          name_mention: signals.name_mention,
+          reply_to_bot: signals.reply_to_bot,
+          mentioned_bot: msg.mentioned_bot,
+        },
+        "mention signals",
+      );
+
       const verdict = this.gate.check(msg);
+      logger.info(
+        { peer_id: msg.peer_id, from_id: msg.from_id, verdict: verdict.kind },
+        "gate verdict",
+      );
       if (verdict.kind === "drop") {
-        logger.debug(
+        logger.info(
           { peer_id: msg.peer_id, from_id: msg.from_id, reason: verdict.reason },
           "inbound dropped",
         );
@@ -81,6 +107,15 @@ export class InboundService {
         return;
       }
       await notifier.notify({ ...msg, attachments: withFiles }, name);
+      logger.info(
+        {
+          peer_id: msg.peer_id,
+          from_id: msg.from_id,
+          mentioned: msg.mentioned_bot,
+          reply_to_bot: msg.is_reply_to_bot,
+        },
+        "channel notification emitted",
+      );
 
       // Record the DM activator so an incoming permission_request knows where
       // to send the prompt. Group chats are explicitly excluded by PRD §15.2.

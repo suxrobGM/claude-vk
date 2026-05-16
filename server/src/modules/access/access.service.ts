@@ -78,14 +78,20 @@ export class AccessService {
   async addSender(peerId: string, input: { user_id?: number; screen_name?: string }) {
     this.requireChat(peerId);
     let userId: number | null = input.user_id ?? null;
+
     if (!userId && input.screen_name) {
       userId = await this.users.resolveScreenName(input.screen_name);
     }
-    if (!userId) throw new BadRequestError("user-not-found");
+    if (!userId) {
+      throw new BadRequestError("user-not-found");
+    }
     const id = userId;
+
     await this.store.update((draft) => {
       const chat = draft.chats[peerId]!;
-      if (!chat.senders.includes(id)) chat.senders.push(id);
+      if (!chat.senders.includes(id)) {
+        chat.senders.push(id);
+      }
     });
     return { peer_id: Number(peerId), user_id: id };
   }
@@ -97,7 +103,11 @@ export class AccessService {
   async removeSender(peerId: string, userIdStr: string): Promise<void> {
     const userId = Number(userIdStr);
     const chat = this.requireChat(peerId);
-    if (!chat.senders.includes(userId)) throw new NotFoundError("sender-not-listed");
+
+    if (!chat.senders.includes(userId)) {
+      throw new NotFoundError("sender-not-listed");
+    }
+
     await this.store.update((draft) => {
       const c = draft.chats[peerId]!;
       c.senders = c.senders.filter((s) => s !== userId);
@@ -109,8 +119,10 @@ export class AccessService {
     if (!isGroupChat(input.peer_id)) {
       throw new BadRequestError("not-a-group-chat-peer-id");
     }
+
     const key = String(input.peer_id);
     const now = new Date().toISOString();
+
     const entry: ChatEntry = {
       kind: "group_chat",
       senders: input.allow ? Array.from(new Set(input.allow)) : [],
@@ -119,6 +131,7 @@ export class AccessService {
       added_by: "manual",
       ...(input.title ? { title: input.title } : {}),
     };
+
     await this.store.update((draft) => {
       draft.chats[key] = entry;
     });
