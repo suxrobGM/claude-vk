@@ -13,7 +13,7 @@ If `/vk:status` itself errors out, the plugin isn't running. Relaunch:
 claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins
 ```
 
-If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/readyz`, `/state`, `/config`.
+If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/state`, `/config`.
 
 ## Common symptoms
 
@@ -77,14 +77,14 @@ The plugin reads `.env` at **startup**, not on every request. After `/vk:configu
 
 ## Where things live
 
-| Thing                      | Path                                                                   |
-| -------------------------- | ---------------------------------------------------------------------- |
-| Token + port + log level   | `~/.claude/channels/vk/.env`                                           |
-| Allowlist + pairings       | `~/.claude/channels/vk/access.json`                                    |
-| User cache                 | `~/.claude/channels/vk/peers.json`                                     |
-| Downloaded attachments     | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`                        |
-| Logs (Pino, daily-rotated) | `~/.claude/channels/vk/log/`                                           |
-| Local management endpoints | `http://127.0.0.1:6060/{config,state,access/*}`, `/healthz`, `/readyz` |
+| Thing                      | Path                                                        |
+| -------------------------- | ----------------------------------------------------------- |
+| Token + port + log level   | `~/.claude/channels/vk/.env`                                |
+| Allowlist + pairings       | `~/.claude/channels/vk/access.json`                         |
+| User cache                 | `~/.claude/channels/vk/peers.json`                          |
+| Downloaded attachments     | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`             |
+| Logs (Pino, daily-rotated) | `~/.claude/channels/vk/log/`                                |
+| Local management endpoints | `http://127.0.0.1:6060/{config,state,access/*}`, `/healthz` |
 
 ## Reset everything
 

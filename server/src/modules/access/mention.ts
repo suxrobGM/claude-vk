@@ -48,7 +48,7 @@ export class MentionDetector {
       keyboard_payload: false,
     };
 
-    logger.info(
+    logger.debug(
       {
         peer_id: msg.peer_id,
         text: msg.text,
@@ -88,7 +88,10 @@ export class MentionDetector {
   }
 
   private isReplyToBot(peerId: number, replyToCmid: number | undefined): boolean {
-    if (replyToCmid == null) return false;
+    if (replyToCmid == null) {
+      return false;
+    }
+
     for (const entry of this.recent.all()) {
       if (entry.peer_id === peerId && entry.conversation_message_id === replyToCmid) {
         return true;

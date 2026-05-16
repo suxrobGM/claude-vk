@@ -3,6 +3,7 @@ import { logger } from "@/common/logger";
 import { AccessGate } from "@/modules/access/access.gate";
 import { MentionDetector } from "@/modules/access/mention";
 import { PairingService } from "@/modules/access/pairing";
+import { PendingGroupsRegistry } from "@/modules/access/pending-groups";
 import { MessagingService } from "@/modules/messaging/messaging.service";
 import { PermissionRelayService } from "@/modules/permission-relay/permission-relay.service";
 import { UsersCache } from "@/modules/users/users.cache";
@@ -33,6 +34,7 @@ export class InboundService {
     private readonly mentions: MentionDetector,
     private readonly permissionRelay: PermissionRelayService,
     private readonly messaging: MessagingService,
+    private readonly pendingGroups: PendingGroupsRegistry,
   ) {}
 
   /** Wires the live channel notifier; called once from `inbound.startup`. */
@@ -43,13 +45,12 @@ export class InboundService {
   /** Run the inbound pipeline for a single normalized VK message. Never throws. */
   async handle(msg: InboundMessage): Promise<void> {
     try {
-      logger.info(
+      logger.debug(
         {
           peer_id: msg.peer_id,
           from_id: msg.from_id,
           is_group_chat: msg.is_group_chat,
           text: msg.text,
-          reply_to: msg.reply_to,
           attachments: msg.attachments.length,
         },
         "inbound message received",
@@ -59,22 +60,15 @@ export class InboundService {
       msg.mentioned_bot = signals.name_mention || signals.reply_to_bot || signals.keyboard_payload;
       msg.is_reply_to_bot = signals.reply_to_bot;
 
-      logger.info(
-        {
-          peer_id: msg.peer_id,
-          name_mention: signals.name_mention,
-          reply_to_bot: signals.reply_to_bot,
-          mentioned_bot: msg.mentioned_bot,
-        },
-        "mention signals",
-      );
-
       const verdict = this.gate.check(msg);
-      logger.info(
-        { peer_id: msg.peer_id, from_id: msg.from_id, verdict: verdict.kind },
-        "gate verdict",
-      );
       if (verdict.kind === "drop") {
+        if (msg.is_group_chat && verdict.reason === "chat-not-allowed") {
+          this.pendingGroups.record({
+            peer_id: msg.peer_id,
+            from_id: msg.from_id,
+            text: msg.text,
+          });
+        }
         logger.info(
           { peer_id: msg.peer_id, from_id: msg.from_id, reason: verdict.reason },
           "inbound dropped",
@@ -102,10 +96,12 @@ export class InboundService {
       );
       const name = await this.users.resolve(msg.from_id);
       const notifier = this.notifier;
+
       if (!notifier) {
         logger.error("inbound notifier missing; dropping message");
         return;
       }
+
       await notifier.notify({ ...msg, attachments: withFiles }, name);
       logger.info(
         {

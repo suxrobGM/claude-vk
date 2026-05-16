@@ -122,7 +122,7 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 
 ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `PORT`) and serves the local admin + health surface only — there is no inbound HTTP route. Routes:
 
-- `GET /healthz`, `GET /readyz` — for users running the plugin under `tmux`, `systemd`, or similar.
+- `GET /healthz` — combined liveness + readiness probe (`{ ok, mcp }`) for users running the plugin under `tmux`, `systemd`, or similar.
 - `POST /access/*`, `GET /state`, `GET /config` — surfaced to the slash commands so they don't have to edit JSON files directly. Edits go through Elysia handlers that validate and atomically write `access.json`; the `fs.watch` on that file picks up the change in-process.
 
 Elysia is chosen over Hono / raw `Bun.serve` for end-to-end type inference on routes, native Bun runtime support, and clean validation via Elysia's `t` schemas.
@@ -223,7 +223,7 @@ claude-vk/
         │   └── common.schema.ts
         │
         └── modules/                      # feature modules (no index.ts barrels)
-            ├── health/                   # /healthz, /readyz
+            ├── health/                   # /healthz (combined liveness + readiness)
             │   ├── health.controller.ts
             │   └── health.schema.ts
             │
@@ -292,7 +292,7 @@ claude-vk/
 - **Infrastructure vs module.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure: they own a runtime primitive (MCP server lifecycle, JSON store, vk-io client) or a cross-cutting helper. They do not implement features and they never import from `modules/`. Modules import infrastructure freely.
 - **One folder per feature, no further nesting.** A feature module is flat. We do not split a module into `services/` + `routes/` + `tools/` — at this scale that splits files by mechanical role rather than by concern, which is the kind of over-engineering we want to avoid. A module with eight files is fine; a module with eight files and three subfolders is not.
 - **File naming inside a module:**
-  - `{module}.controller.ts` — Elysia HTTP plugin exporting the module's routes. Example: `access.controller.ts` registers `/access/*`; `runtime.controller.ts` registers `/config` + `/state`; `health.controller.ts` registers `/healthz` + `/readyz`.
+  - `{module}.controller.ts` — Elysia HTTP plugin exporting the module's routes. Example: `access.controller.ts` registers `/access/*`; `runtime.controller.ts` registers `/config` + `/state`; `health.controller.ts` registers `/healthz`.
   - `{module}.ws.ts` — Elysia WebSocket plugin, if the module needs one. (No module needs one in v1.)
   - `{module}.schema.ts` — TypeBox schemas owned by the module: persistent-file shapes (`access.schema.ts` defines `access.json`), HTTP payloads, and MCP tool input shapes for that module. One file per module — when both an MCP tool and an HTTP route in the same module need a shape, they import it from this file.
   - Everything else uses descriptive kebab-case names: `store.ts`, `gate.ts`, `pairing.ts`, `notifier.ts`, `send-message.ts`. No suffix gymnastics.

@@ -151,3 +151,16 @@ export const AddGroupResponseSchema = t.Composite([
 export const PendingPairingsResponseSchema = t.Object({
   pending: t.Array(t.Object({ code: t.String(), pair: PendingPairSchema })),
 });
+
+export const PendingGroupSchema = t.Object({
+  peer_id: t.Integer(),
+  first_seen: t.String(),
+  last_seen: t.String(),
+  hit_count: t.Integer(),
+  sample_from_id: t.Integer(),
+  sample_text: t.String(),
+});
+
+export const PendingGroupsResponseSchema = t.Object({
+  pending: t.Array(PendingGroupSchema),
+});

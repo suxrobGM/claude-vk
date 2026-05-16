@@ -5,6 +5,7 @@ import { UsersCache } from "@/modules/users/users.cache";
 import type { ChatEntry, ChatKind, DmPolicy, MentionPolicy, PendingPair } from "./access.schema";
 import { AccessStore } from "./access.store";
 import { PairingService } from "./pairing";
+import { PendingGroupsRegistry } from "./pending-groups";
 
 export interface ChatSummary {
   peer_id: number;
@@ -34,6 +35,7 @@ export class AccessService {
     private readonly store: AccessStore,
     private readonly pairing: PairingService,
     private readonly users: UsersCache,
+    private readonly pendingGroups: PendingGroupsRegistry,
   ) {}
 
   /** All allowed chats reduced to display summaries. */
@@ -135,7 +137,13 @@ export class AccessService {
     await this.store.update((draft) => {
       draft.chats[key] = entry;
     });
+    this.pendingGroups.forget(input.peer_id);
     return { peer_id: input.peer_id, chat: entry };
+  }
+
+  /** Group-chat peer_ids the inbound gate dropped recently — operator hint. */
+  listPendingGroups() {
+    return this.pendingGroups.list();
   }
 
   private requireChat(peerId: string): ChatEntry {

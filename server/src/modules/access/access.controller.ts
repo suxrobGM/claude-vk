@@ -11,6 +11,7 @@ import {
   ConsumePairingOkSchema,
   PeerIdParamSchema,
   PeerIdSenderParamSchema,
+  PendingGroupsResponseSchema,
   PendingPairingsResponseSchema,
   PoliciesResponseSchema,
   RemoveChatResponseSchema,
@@ -117,4 +118,10 @@ export const accessController = new Elysia({
   )
   .get("/pairings", () => ({ pending: access.listPending() }), {
     response: PendingPairingsResponseSchema,
+  })
+  .get("/groups/pending", () => ({ pending: access.listPendingGroups() }), {
+    response: PendingGroupsResponseSchema,
+    detail: {
+      summary: "Group-chat peer_ids the gate dropped recently — copy into /vk:access group add.",
+    },
   });

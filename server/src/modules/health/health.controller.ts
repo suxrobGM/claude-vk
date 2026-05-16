@@ -1,27 +1,19 @@
 import { Elysia } from "elysia";
 import { isMcpReady } from "@/mcp/server";
-import { HealthzResponseSchema, ReadyzResponseSchema } from "./health.schema";
+import { HealthzResponseSchema } from "./health.schema";
 
-export const healthController = new Elysia({ name: "health", tags: ["Health"] })
-  .get("/healthz", () => ({ ok: true }), {
+export const healthController = new Elysia({ name: "health", tags: ["Health"] }).get(
+  "/healthz",
+  () => {
+    const mcp = isMcpReady();
+    return { ok: mcp, mcp };
+  },
+  {
     response: HealthzResponseSchema,
     detail: {
-      summary: "Liveness probe",
-      description: "Returns 200 as long as the Bun process is up and Elysia is serving.",
+      summary: "Liveness + readiness probe",
+      description:
+        "Returns 200 with `{ ok, mcp }`. `ok` reflects overall readiness (currently MCP stdio transport connected). The response itself proves process liveness.",
     },
-  })
-  .get(
-    "/readyz",
-    () => {
-      const mcp = isMcpReady();
-      return { ok: mcp, mcp };
-    },
-    {
-      response: ReadyzResponseSchema,
-      detail: {
-        summary: "Readiness probe",
-        description:
-          "Reports whether the MCP stdio transport has connected. Use to gate traffic when running under a supervisor.",
-      },
-    },
-  );
+  },
+);
