@@ -10,7 +10,7 @@ Run `/vk:status` — it aggregates `/healthz`, `/admin/state`, `/admin/access/*`
 If `/vk:status` itself errors out, the plugin isn't running. Relaunch:
 
 ```bash
-claude --dangerously-load-development-channels plugin:vk@claude-vk
+claude --dangerously-load-development-channels plugin:vk@claude-plugins
 ```
 
 If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/readyz`, `/admin/state`, `/admin/config`.

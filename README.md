@@ -20,8 +20,8 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
 3. **Install the plugin** from this marketplace:
 
    ```text
-   /plugin marketplace add https://github.com/suxrobgm/claude-vk
-   /plugin install vk@claude-vk
+   /plugin marketplace add https://github.com/suxrobgm/claude-plugins
+   /plugin install vk@claude-plugins
    /reload-plugins
    ```
 
@@ -36,7 +36,7 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
 5. **Relaunch Claude with the channel attached.**
 
    ```text
-   claude --dangerously-load-development-channels plugin:vk@claude-vk
+   claude --dangerously-load-development-channels plugin:vk@claude-plugins
    ```
 
    The dev flag is required while the plugin is not on Anthropic's curated allowlist.

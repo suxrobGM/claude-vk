@@ -8,6 +8,8 @@
   "scripts": {
     "start": "bun run --cwd server --silent start",
     "dev": "bun run --cwd server --silent dev",
+    "build": "bun run --cwd server --silent build",
+    "release": "bun run build && bun scripts/sync-to-marketplace.ts",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "prepare": "husky"

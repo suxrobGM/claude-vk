@@ -44,12 +44,12 @@ For group chats, you generally want VK to deliver only mentions and replies-to-b
 In any Claude Code session:
 
 ```text
-/plugin marketplace add https://github.com/suxrobgm/claude-vk
-/plugin install vk@claude-vk
+/plugin marketplace add https://github.com/suxrobgm/claude-plugins
+/plugin install vk@claude-plugins
 /reload-plugins
 ```
 
-The marketplace points at this repo. The plugin source lives at the repo root (`source: "."` in `.claude-plugin/marketplace.json`).
+The marketplace lives in a separate repo, [`claude-plugins`](https://github.com/suxrobgm/claude-plugins), which ships pre-bundled plugin artifacts — no `bun install` step on the user's machine. The `vk` plugin source (this repo) is built and synced into `claude-plugins/plugins/vk/` on each release.
 
 ## 7. Save the token
 
@@ -66,7 +66,7 @@ The plugin reads this file at startup. Shell env always wins on conflict: `VK_TO
 Exit your current session and start a new one:
 
 ```bash
-claude --dangerously-load-development-channels plugin:vk@claude-vk
+claude --dangerously-load-development-channels plugin:vk@claude-plugins
 ```
 
 The `--dangerously-load-development-channels` flag is required while `claude-vk` isn't on Anthropic's curated allowlist. Combining it with `--channels` does **not** extend the bypass — pick one.

@@ -80,8 +80,10 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 .output
+
+# Bundled server output (shipped via the marketplace repo, not committed here)
+/dist/
 
 # Gatsby files
 .cache/

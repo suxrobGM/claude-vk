@@ -44,7 +44,7 @@ VK channel
 
 If either liveness probe fails, the plugin isn't running. Remind the user
 to launch with
-`claude --dangerously-load-development-channels plugin:vk@claude-vk`.
+`claude --dangerously-load-development-channels plugin:vk@claude-plugins`.
 
 If `vk_connected` is `false` with `last_error: "VK_TOKEN missing"`, the
 plugin booted without a token — run `/vk:configure <token>` then restart

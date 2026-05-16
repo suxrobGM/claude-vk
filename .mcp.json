@@ -2,7 +2,7 @@
   "mcpServers": {
     "vk": {
       "command": "bun",
-      "args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--shell=bun", "--silent", "start"]
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/dist/server.js"]
     }
   }
 }
