@@ -22,7 +22,7 @@ Pre-commit: `lint-staged` → `prettier --write` via husky. Don't bypass.
 
 **Composition.** [app.ts](server/src/app.ts) is the only composition point and runs phases in order: `bootstrapContainer()` → init persistent stores (`AccessStore`, `UsersCache`) → `startMcpServer()` (which calls `registerAllTools`) → `startInbound(mcp)` (channel notifier, permission-relay handler, community resolver prefetch) → mount each module's `*.controller.ts` on Elysia → `listen`. Stores load **before** MCP connects so tool handlers can't hit an uninitialized cache.
 
-**Infrastructure vs modules.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure — never import from `modules/`. Feature modules under `modules/` are flat; one folder per concern, no further nesting, no module-level `index.ts` barrels. File suffixes: `*.controller.ts` (Elysia), `*.tools.ts` (MCP), `*.service.ts`, `*.schema.ts` (zod for MCP inputs + TypeBox for persistent/HTTP shapes).
+**Infrastructure vs modules.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure — never import from `modules/`. Feature modules under `modules/` are flat; one folder per concern, no module-level `index.ts` barrels. The only permitted nesting is a `schemas/` subfolder when TypeBox/zod definitions outgrow one file (see [access/schemas/](server/src/modules/access/schemas/) — split by purpose: value enums, on-disk shape, HTTP transport). File suffixes: `*.controller.ts` (Elysia), `*.tools.ts` (MCP), `*.service.ts`, `*.schema.ts` (zod for MCP inputs + TypeBox for persistent/HTTP shapes).
 
 **MCP tools.** Each module has `@injectable() *Tools` with `register(server)`; [mcp/register-tools.ts](server/src/mcp/register-tools.ts) resolves and calls each. To add: zod `*InputShape` in `*.schema.ts`, service method returning `{ ok: true, ... } | ToolFailure` wrapped in `runWithEnvelope`, `register(server)` call wrapping with `toCallResult`, container line. Both helpers live in [common/utils/tool-envelope.ts](server/src/common/utils/tool-envelope.ts).
 
@@ -39,11 +39,11 @@ Tool handlers **never throw to MCP** — `VkApiError`/`PluginError` collapse to 
 
 The user only configures **`VK_TOKEN`** and optionally **`PORT`** / **`LOG_LEVEL`**. The HTTP listener is hard-bound to `127.0.0.1` — there is no inbound HTTP surface, so no public-exposure knob. The bound community's `id` and `screen_name` are auto-resolved at startup via `groups.getById` and cached in [`CommunityResolver`](server/src/modules/access/community-resolver.ts) — no env override.
 
-**State (JSON, never SQLite).** [state/json-store.ts](server/src/state/json-store.ts) is the generic store: atomic tmp+rename writes, in-memory cache, serialized writes, TypeBox validation on load + update. Bad writes are rejected; previous version stays live. Schemas live with the module that owns the file.
+**State (JSON, never SQLite).** [state/json-store.ts](server/src/state/json-store.ts) is the generic store: atomic tmp+rename writes, in-memory cache, serialized writes, TypeBox validation on load + update. Bad writes are rejected; previous version stays live. Schemas live with the module that owns the file (e.g. [access/schemas/access-file.schema.ts](server/src/modules/access/schemas/access-file.schema.ts) for `access.json`).
 
 Two persistent files only — both under `~/.claude/channels/vk/` (path fixed at install time):
 
-- `access.json` — policies, chats, senders, mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
+- `access.json` — `dm_policy`, chats (DM + group-chat union), group-chat senders + mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
 - `peers.json` — VK user/group metadata cache (TTL 1h, LRU 10k).
 
 **Access + mention.** Gate in [access/access.gate.ts](server/src/modules/access/access.gate.ts): chat allowlist → (group chats only) per-chat senders + mention-policy. Gate on **`from_id`, not `peer_id`** (PRD §9.4). DMs have one implicit sender (`peer_id == from_id`) so they skip the sender layer. Mention signals in [access/mention.ts](server/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved).
