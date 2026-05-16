@@ -19,7 +19,6 @@
       "Bash(*wget*|*sh*)",
       "Bash(*wget*|*bash*)",
       "Bash(eval *)",
-      "Bash(:(){*)",
       "Bash(git *)",
       "Bash(bun *)",
       "Bash(npm *)",
