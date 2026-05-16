@@ -4,11 +4,11 @@ import { isMcpReady } from "@/mcp/server";
 import { CommunityResolver } from "@/modules/access/community-resolver";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
 import { stateDir } from "@/state/paths";
-import type { ConfigResponse, StateResponse } from "./admin.schema";
+import type { ConfigResponse, StateResponse } from "./runtime.schema";
 
-/** Read-only admin queries: redacted config + runtime status snapshot. */
+/** Read-only runtime queries: redacted config + runtime status snapshot. */
 @singleton()
-export class AdminService {
+export class RuntimeService {
   constructor(
     private readonly status: StatusRegistry,
     private readonly recent: RecentSentMessages,

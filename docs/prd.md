@@ -102,7 +102,7 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 │  │ Long-poll loop │──▶│ MCP server       │   │ ElysiaJS    │ │
 │  │  (vk-io        │   │  (stdio)         │   │  127.0.0.1  │ │
 │  │   updates)     │   │                  │   │  :6060      │ │
-│  └────────┬───────┘   └──────────────────┘   │  /admin/*   │ │
+│  └────────┬───────┘   └──────────────────┘   │  /access/*  │ │
 │           │                   │              │  /healthz   │ │
 │           ▼                   ▼              └──────┬──────┘ │
 │  ┌─────────────┐       ┌─────────────────────┐     │         │
@@ -123,7 +123,7 @@ The plugin mirrors the Telegram plugin's UX (`/vk:configure`, pairing flow, allo
 ElysiaJS holds a single port (**`127.0.0.1:6060`** by default, configurable via `PORT`) and serves the local admin + health surface only — there is no inbound HTTP route. Routes:
 
 - `GET /healthz`, `GET /readyz` — for users running the plugin under `tmux`, `systemd`, or similar.
-- `POST /admin/access/*`, `GET /admin/state`, `GET /admin/config` — surfaced to the slash commands so they don't have to edit JSON files directly. Edits go through Elysia handlers that validate and atomically write `access.json`; the `fs.watch` on that file picks up the change in-process.
+- `POST /access/*`, `GET /state`, `GET /config` — surfaced to the slash commands so they don't have to edit JSON files directly. Edits go through Elysia handlers that validate and atomically write `access.json`; the `fs.watch` on that file picks up the change in-process.
 
 Elysia is chosen over Hono / raw `Bun.serve` for end-to-end type inference on routes, native Bun runtime support, and clean validation via Elysia's `t` schemas.
 
@@ -161,7 +161,7 @@ The repo is a **Bun workspaces monorepo**. The repo root _is_ the plugin root �
 The split inside `server/src/` is **infrastructure folders vs feature modules**:
 
 - **Infrastructure** (`mcp/`, `state/`, `vk/`, `common/`) — primitives that every feature uses: MCP server lifecycle, JSON store, vk-io client, shared helpers. Infrastructure does not implement features and never imports from `modules/`.
-- **Feature modules** (`modules/health/`, `modules/admin/`, `modules/access/`, `modules/inbound/`, `modules/messaging/`, `modules/history/`, `modules/users/`, `modules/permission-relay/`) — each owns a slice of behavior end-to-end: services, schemas, MCP tool implementations, and (when applicable) an Elysia controller. Modules consume infrastructure.
+- **Feature modules** (`modules/health/`, `modules/runtime/`, `modules/access/`, `modules/inbound/`, `modules/messaging/`, `modules/history/`, `modules/users/`, `modules/permission-relay/`) — each owns a slice of behavior end-to-end: services, schemas, MCP tool implementations, and (when applicable) an Elysia controller. Modules consume infrastructure.
 - **`src/app.ts` is the only Elysia composition point.** It boots the MCP server, creates the Elysia app, mounts each module's controller plugin, and binds the listener. There is no separate `http/` infrastructure folder — `health` and `admin` are feature modules like the rest, just with no MCP surface.
 
 ```
@@ -227,14 +227,14 @@ claude-vk/
             │   ├── health.controller.ts
             │   └── health.schema.ts
             │
-            ├── admin/                    # cross-cutting /admin/config, /admin/state
-            │   ├── admin.controller.ts
-            │   ├── admin.service.ts
-            │   └── admin.schema.ts
+            ├── runtime/                  # cross-cutting /config, /state
+            │   ├── runtime.controller.ts
+            │   ├── runtime.service.ts
+            │   └── runtime.schema.ts
             │
             ├── access/                   # policy, pairing, two-layer gate, mention detection
-            │   ├── access.controller.ts         # /admin/access/* Elysia plugin
-            │   ├── access.schema.ts             # TypeBox for access.json + admin route payloads
+            │   ├── access.controller.ts         # /access/* Elysia plugin
+            │   ├── access.schema.ts             # TypeBox for access.json + route payloads
             │   ├── access.service.ts            # CRUD with typed-error throwing
             │   ├── access.store.ts              # JsonStore wrapper + fs.watch hot reload
             │   ├── access.gate.ts               # chat + sender + mention-policy checks
@@ -292,12 +292,12 @@ claude-vk/
 - **Infrastructure vs module.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure: they own a runtime primitive (MCP server lifecycle, JSON store, vk-io client) or a cross-cutting helper. They do not implement features and they never import from `modules/`. Modules import infrastructure freely.
 - **One folder per feature, no further nesting.** A feature module is flat. We do not split a module into `services/` + `routes/` + `tools/` — at this scale that splits files by mechanical role rather than by concern, which is the kind of over-engineering we want to avoid. A module with eight files is fine; a module with eight files and three subfolders is not.
 - **File naming inside a module:**
-  - `{module}.controller.ts` — Elysia HTTP plugin exporting the module's routes. Example: `access.controller.ts` registers `/admin/access/*`; `inbound.controller.ts` registers `/webhook/vk`; `health.controller.ts` registers `/healthz` + `/readyz`.
+  - `{module}.controller.ts` — Elysia HTTP plugin exporting the module's routes. Example: `access.controller.ts` registers `/access/*`; `runtime.controller.ts` registers `/config` + `/state`; `health.controller.ts` registers `/healthz` + `/readyz`.
   - `{module}.ws.ts` — Elysia WebSocket plugin, if the module needs one. (No module needs one in v1.)
   - `{module}.schema.ts` — TypeBox schemas owned by the module: persistent-file shapes (`access.schema.ts` defines `access.json`), HTTP payloads, and MCP tool input shapes for that module. One file per module — when both an MCP tool and an HTTP route in the same module need a shape, they import it from this file.
   - Everything else uses descriptive kebab-case names: `store.ts`, `gate.ts`, `pairing.ts`, `notifier.ts`, `send-message.ts`. No suffix gymnastics.
 - **MCP tools are registered by their owning module.** Each module that exposes tools has a `{module}.tools.ts` whose default export is a `register(server)` function. `src/mcp/register-tools.ts` imports and calls each one on startup. The MCP server itself does not know what tools exist until those calls run.
-- **HTTP routes are registered by their owning module.** `src/app.ts` mounts each module's `*.controller.ts` Elysia plugin during startup; there is no separate `http/` folder. The `admin` module owns only the cross-cutting endpoints (`/admin/config`, `/admin/state`) — feature-specific admin endpoints (`/admin/access/*`) live in the feature module itself.
+- **HTTP routes are registered by their owning module.** `src/app.ts` mounts each module's `*.controller.ts` Elysia plugin during startup; there is no separate `http/` folder. The `runtime` module owns only the cross-cutting endpoints (`/config`, `/state`) — feature-specific endpoints (e.g. `/access/*`) live in the feature module itself.
 - **`state/` holds _no_ schemas.** It's a generic store that takes any TypeBox schema as a validator. Schemas live with the module that owns the data.
 - **Tests are colocated** as `<file>.test.ts` next to the source. No separate `tests/` directory. Bun's runner picks them up.
 - **No standalone `attachments/` module.** Outbound upload is just another messaging tool (`messaging/upload-attachment.ts`); inbound download is part of the inbound pipeline (`inbound/attachments.ts`). Splitting them out would create a module whose only invariant is "it touches files," which isn't a useful boundary.
@@ -571,7 +571,7 @@ Notes:
 | `/vk:access mention-policy <peer_id> {mention_only\|all\|reply_only}` | Group chats only — controls activation, not access.                                                           |
 | `/vk:status`                                                          | Prints: transport, connection health, community handle, policies, chat count, sender count, last error.       |
 
-All commands hit `http://127.0.0.1:6060/admin/*`, so they work even from within skills. The admin API performs validation, atomic write to the relevant JSON file, and signals the inbound router to reload its cached gate.
+All commands hit `http://127.0.0.1:6060/{access,config,state}`, so they work even from within skills. The local management API performs validation, atomic write to the relevant JSON file, and signals the inbound router to reload its cached gate.
 
 ---
 

@@ -26,14 +26,14 @@ import { AccessService } from "./access.service";
 const access = container.resolve(AccessService);
 
 /**
- * REST surface for `/admin/access/*`. Schemas live in {@link ./access.schema},
+ * REST surface for `/access/*`. Schemas live in {@link ./access.schema},
  * logic in {@link AccessService}. Errors thrown by the service (subclasses of
  * `HttpError`) are mapped to HTTP responses by the global error handler.
  */
 export const accessController = new Elysia({
   name: "access",
-  prefix: "/admin/access",
-  tags: ["Admin"],
+  prefix: "/access",
+  tags: ["Access"],
 })
   .get("/chats", () => ({ chats: access.listChats() }), {
     response: ChatsListResponseSchema,
@@ -59,7 +59,7 @@ export const accessController = new Elysia({
     "/chats/:peer_id/senders",
     async ({ params, body, set }) => {
       const added = await access.addSender(params.peer_id, body);
-      set.headers["Location"] = `/admin/access/chats/${params.peer_id}/senders/${added.user_id}`;
+      set.headers["Location"] = `/access/chats/${params.peer_id}/senders/${added.user_id}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },
@@ -89,7 +89,7 @@ export const accessController = new Elysia({
     "/groups",
     async ({ body, set }) => {
       const added = await access.addGroup(body);
-      set.headers["Location"] = `/admin/access/chats/${added.peer_id}`;
+      set.headers["Location"] = `/access/chats/${added.peer_id}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },

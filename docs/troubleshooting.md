@@ -2,7 +2,7 @@
 
 ## Diagnose first
 
-Run `/vk:status` — it aggregates `/healthz`, `/admin/state`, `/admin/access/*` into one block. The two fields that matter most:
+Run `/vk:status` — it aggregates `/healthz`, `/state`, `/access/*` into one block. The two fields that matter most:
 
 - `connected` — is the long-poll loop running?
 - `last_error` — most recent failure recorded by the loop, if any.
@@ -13,7 +13,7 @@ If `/vk:status` itself errors out, the plugin isn't running. Relaunch:
 claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins
 ```
 
-If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/readyz`, `/admin/state`, `/admin/config`.
+If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/readyz`, `/state`, `/config`.
 
 ## Common symptoms
 
@@ -77,14 +77,14 @@ The plugin reads `.env` at **startup**, not on every request. After `/vk:configu
 
 ## Where things live
 
-| Thing                      | Path                                                   |
-| -------------------------- | ------------------------------------------------------ |
-| Token + port + log level   | `~/.claude/channels/vk/.env`                           |
-| Allowlist + pairings       | `~/.claude/channels/vk/access.json`                    |
-| User cache                 | `~/.claude/channels/vk/peers.json`                     |
-| Downloaded attachments     | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`        |
-| Logs (Pino, daily-rotated) | `~/.claude/channels/vk/log/`                           |
-| Local admin endpoints      | `http://127.0.0.1:6060/admin/*`, `/healthz`, `/readyz` |
+| Thing                      | Path                                                                   |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Token + port + log level   | `~/.claude/channels/vk/.env`                                           |
+| Allowlist + pairings       | `~/.claude/channels/vk/access.json`                                    |
+| User cache                 | `~/.claude/channels/vk/peers.json`                                     |
+| Downloaded attachments     | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`                        |
+| Logs (Pino, daily-rotated) | `~/.claude/channels/vk/log/`                                           |
+| Local management endpoints | `http://127.0.0.1:6060/{config,state,access/*}`, `/healthz`, `/readyz` |
 
 ## Reset everything
 

@@ -24,8 +24,6 @@ Pre-commit: `lint-staged` → `prettier --write` via husky. Don't bypass.
 
 **Infrastructure vs modules.** `mcp/`, `state/`, `vk/`, `common/` are infrastructure — never import from `modules/`. Feature modules under `modules/` are flat; one folder per concern, no further nesting, no module-level `index.ts` barrels. File suffixes: `*.controller.ts` (Elysia), `*.tools.ts` (MCP), `*.service.ts`, `*.schema.ts` (zod for MCP inputs + TypeBox for persistent/HTTP shapes).
 
-**Implemented modules:** `health`, `ping`, `messaging`, `access`, `admin`, `inbound`, `history`, `users`, `permission-relay`.
-
 **MCP tools.** Each module has `@injectable() *Tools` with `register(server)`; [mcp/register-tools.ts](server/src/mcp/register-tools.ts) resolves and calls each. To add: zod `*InputShape` in `*.schema.ts`, service method returning `{ ok: true, ... } | ToolFailure` wrapped in `runWithEnvelope`, `register(server)` call wrapping with `toCallResult`, container line. Both helpers live in [common/utils/tool-envelope.ts](server/src/common/utils/tool-envelope.ts).
 
 Tool handlers **never throw to MCP** — `VkApiError`/`PluginError` collapse to `{ ok: false, code, message }`; anything else becomes `internal_error`. Throwing closes the connection.
@@ -50,7 +48,7 @@ Two persistent files only — both under `~/.claude/channels/vk/` (path fixed at
 
 **Access + mention.** Three-layer gate in [access/access.gate.ts](server/src/modules/access/access.gate.ts): chat allowlist → per-chat senders → mention-policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). Mention signals in [access/mention.ts](server/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved).
 
-Policies: only DMs have one (`policies.dm` = `pairing` (default) or `allowlist`). Group chats are off by default and opt in by `peer_id` via `POST /admin/access/groups` (`/vk:access group add`); they have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
+Policies: only DMs have one (`policies.dm` = `pairing` (default) or `allowlist`). Group chats are off by default and opt in by `peer_id` via `POST /access/groups` (`/vk:access group add`); they have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
 
 **Inbound.** [inbound/long-poll.service.ts](server/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` — auto-resolves the bound group ID, owns the poll cursor + key-expired refresh. We layer on a connect-backoff loop (1s→30s, code 5 fatal) and a `message_new` handler that converts via [`vkMessageToInbound`](server/src/modules/inbound/message-adapter.ts) and dispatches into [`InboundService.handle`](server/src/modules/inbound/inbound.service.ts). Pipeline: `mention enrich → gate → (drop | DM pair | permission verdict | download + notify)`. Only DMs ever reach `need_pair`; group chats are silently dropped until added. Never throws — every failure is logged and the poll loop continues. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
 

@@ -9,9 +9,9 @@ import { startMcpServer } from "@/mcp/server";
 import { accessController } from "@/modules/access/access.controller";
 import { AccessStore } from "@/modules/access/access.store";
 import { PairingService } from "@/modules/access/pairing";
-import { adminController } from "@/modules/admin/admin.controller";
 import { healthController } from "@/modules/health/health.controller";
 import { startInbound } from "@/modules/inbound/inbound.startup";
+import { runtimeController } from "@/modules/runtime/runtime.controller";
 import { UsersCache } from "@/modules/users/users.cache";
 
 validateEnv();
@@ -30,7 +30,7 @@ const app = new Elysia()
   .use(errorMiddleware)
   .use(swaggerPlugin)
   .use(healthController)
-  .use(adminController)
+  .use(runtimeController)
   .use(accessController)
   .listen(parseInt(process.env.PORT!));
 

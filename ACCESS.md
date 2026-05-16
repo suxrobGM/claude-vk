@@ -173,8 +173,8 @@ Change it:
 
 ## `/vk:access` sub-actions
 
-The slash skill calls the local admin API at
-`http://127.0.0.1:6060/admin/access/*`. Full reference in
+The slash skill calls the local management API at
+`http://127.0.0.1:6060/access/*`. Full reference in
 [skills/access/SKILL.md](skills/access/SKILL.md).
 
 | Sub-action                                               | Effect                                                |
