@@ -29,10 +29,10 @@ Pre-commit `lint-staged` + `prettier` via husky — don't bypass.
 
 **State (JSON, never SQLite).** [state/json-store.ts](server/src/state/json-store.ts) — atomic tmp+rename, in-memory cache, TypeBox-validated. Two files under `~/.claude/channels/vk/`:
 
-- `access.json` — `dmPolicy`, chats, group senders + mention policies, pending pair codes. Hot-reloaded via `fs.watch`.
+- `access.json` — `dmPolicy`, `mentionPatterns`, chats, group senders + mention policies, pending pair codes. Hot-reloaded via `fs.watch`.
 - `peers.json` — VK user/group metadata (TTL 1h, LRU 10k).
 
-**Access + mention.** Gate ([access/access.gate.ts](server/src/modules/access/access.gate.ts)): chat allowlist → (group chats only) per-chat senders + mention policy. Gate on **`from_id`, not `peer_id`** (PRD §9.4). DMs skip the sender layer. Only DMs have a policy (`dmPolicy` = `pairing` (default) or `allowlist`); group chats opt in by `peerId` and have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
+**Access + mention.** Gate ([access/access.gate.ts](server/src/modules/access/access.gate.ts)): chat allowlist → per-chat senders + mention policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). `dmPolicy` (`pairing`/`allowlist`) is DM-only; groups opt in by `peerId`. Mention detection ([access/mention.ts](server/src/modules/access/mention.ts)) matches `[club{ID}|...]`, `@<screen_name>`, root `mentionPatterns`, or quote-reply (restart-safe via `reply_message.from_id === -communityId`). Permission relay DMs the first `kind: "dm"` in `access.json`. Full surface in [ACCESS.md](ACCESS.md).
 
 **Inbound.** [inbound/long-poll.service.ts](server/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` with a connect-backoff loop (1s→30s, code 5 fatal). Pipeline: `mention enrich → gate → (drop | DM pair | permission verdict | download + notify)`. Group chats are silently dropped until added; default to `mention_only`. Never throws — failures are logged, poll continues.
 

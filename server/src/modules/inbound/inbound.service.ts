@@ -112,12 +112,6 @@ export class InboundService {
         },
         "channel notification emitted",
       );
-
-      // Record the DM activator so an incoming permission_request knows where
-      // to send the prompt. Group chats are explicitly excluded by PRD §15.2.
-      if (!msg.is_group_chat) {
-        this.permissionRelay.recordLastDmActivator(msg.peer_id, msg.from_id);
-      }
     } catch (err) {
       logger.error({ err }, "inbound handler crashed; transport continues");
     }

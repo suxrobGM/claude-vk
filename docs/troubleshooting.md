@@ -1,97 +1,114 @@
 # Troubleshooting
 
-## Diagnose first
+## First step: `/vk:status`
 
-Run `/vk:status` — it aggregates `/healthz`, `/state`, `/access/*` into one block. The two fields that matter most:
+Aggregates `/healthz`, `/state`, `/access/*`. Two key fields:
 
 - `connected` — is the long-poll loop running?
-- `lastError` — most recent failure recorded by the loop, if any.
+- `lastError` — most recent failure, if any.
 
-If `/vk:status` itself errors out, the plugin isn't running. Relaunch:
+Raw equivalents: `http://127.0.0.1:6060/healthz`, `/state`, `/config`.
+
+If `/vk:status` itself fails, the plugin isn't running — relaunch:
 
 ```bash
 claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins
 ```
 
-If you'd rather skim raw output, the same data is at `http://127.0.0.1:6060/healthz`, `/state`, `/config`.
+## Symptoms
 
-## Common symptoms
+### `lastError: "VK_TOKEN missing"`
 
-### `connected: false`, `lastError: "VK_TOKEN missing"`
+No token. Run `/vk:configure <token>` and restart Claude (`.env` is read at
+startup only). Same diagnosis is also pushed as a `<channel>` warning on launch.
 
-The plugin booted, found no token, and parked. Run `/vk:configure <token>` and restart your Claude session. The long-poll loop only resolves config at startup.
+### `lastError` starts with `vk_api_5`
 
-You should also see this as a `<channel severity="warning">` message in Claude on first launch — that's the same diagnosis pushed through the channel.
+VK rejected the token. Most likely:
 
-### `connected: false`, `lastError` starts with `vk_api_5`
+1. Token deleted/expired.
+2. Missing scopes — need `messages, photos, docs, manage`.
+3. Token belongs to a different community.
 
-VK rejected the access token. Causes (most common first):
+Fix: vk.com → Manage → API usage → Access tokens → generate fresh →
+`/vk:configure <new-token>` → restart.
 
-1. Token was deleted or expired in the community admin.
-2. Token is missing required scopes (`messages, photos, docs, manage`).
-3. Token belongs to a different community than the one you intend to bridge.
+### `lastError: "start failed (attempt N)"`
 
-Fix: vk.com -> Manage -> API usage -> Access tokens -> generate a new one with the right scopes -> `/vk:configure <new-token>` -> restart.
+Can't reach VK's long-poll server:
 
-### `connected: false`, `lastError: "start failed (attempt N)"`
-
-The plugin couldn't reach VK's long-poll server. Causes:
-
-1. **Long Poll API is not enabled.** Most common. Check **Manage -> API usage -> Long Poll API**: toggle on, version `>= 5.199`, `message_new` checked. After three failed attempts the plugin emits a `<channel>` warning describing this.
-2. **No outbound HTTPS.** The plugin connects to `api.vk.com` and the VK-supplied poll server. If you're behind a firewall, allow outbound 443 to `*.vk.com` and `*.userapi.com`.
-3. **Community type doesn't support bot capabilities.** Make sure the community is **Group** (Page / Event don't allow message API access in the same way).
+1. **Long Poll API disabled.** Manage → API usage → Long Poll API: on,
+   version `>= 5.199`, `message_new` checked. (After 3 fails the plugin
+   emits a `<channel>` warning saying exactly this.)
+2. **Outbound HTTPS blocked.** Allow `*.vk.com` and `*.userapi.com` on 443.
+3. **Wrong community type.** Must be **Group** — Page/Event don't expose the message API.
 
 ### Bot doesn't reply in a group chat
 
-Walk through these in order:
+In order:
 
-1. **Is the chat allowlisted?** `/vk:access list` should show its `peer_id`. If not, opt the group in: `/vk:access group add <peer_id>` (group chats no longer pair — they have to be added explicitly by `peer_id`).
-2. **Is your user listed for that chat?** `/vk:access list <peer_id>`. Add yourself: `/vk:access add-sender <peer_id> <your_user_id>`.
-3. **Is the message activating the chat?** Default `mentionPolicy` is `mention_only` — the bot ignores everything that isn't `@<community>` or a reply to one of its own messages. Mention it explicitly, or change policy: `/vk:access mention-policy <peer_id> all`.
-4. **Is privacy mode hiding the message from VK?** In community settings, "Read all messages" off means VK only delivers mentions and replies. That's fine if your `mentionPolicy` agrees, but if you want everything, turn it on.
+1. **Chat allowlisted?** `/vk:access list`. Add: `/vk:access group add <peer_id>`.
+2. **Sender listed?** `/vk:access list <peer_id>`. Add: `/vk:access add-sender <peer_id> <your_id>`.
+3. **Message activates the chat?** Default `mention_only` ignores everything that
+   isn't `@<community>`, a `mentionPatterns` hit, or a quote-reply to the bot.
+   Either mention explicitly, add a friendly name to `mentionPatterns`
+   (e.g. `["claude", "клод"]`), or `/vk:access mention-policy <peer_id> all`.
+4. **VK privacy mode hiding it?** "Read all messages" off → VK only delivers
+   mentions/replies. Fine with `mention_only`; turn on for `all`.
 
 ### Pairing code never arrives
 
-You DM'd the bot and got nothing back. Causes:
-
-1. **Token missing `messages` scope.** Regenerate with `messages, photos, docs, manage`.
-2. **Long-poll not connected.** `/vk:status` will show `connected: false`. Fix that first.
-3. **You blocked the bot.** Unblock the community in VK settings.
-4. **Allowlist policy + DM not on the list.** Pairing only emits codes under `pairing` policy. Switch back temporarily: `/vk:access policy pairing`.
+1. Token missing `messages` scope.
+2. Long-poll not connected (`/vk:status` shows `connected: false`).
+3. You blocked the community in VK.
+4. `dmPolicy` isn't `pairing` — switch with `/vk:access policy pairing`.
 
 ### "This bot is locked to specific users" reply
 
-You're DMing a bot whose DM policy is `allowlist` and you're not on the list. Ask the operator to run `/vk:access add-sender <peer_id> <your_user_id>`. Subsequent DMs within 24h are silently dropped (per-sender rate limit).
+`dmPolicy=allowlist` and you're not on it. Operator runs
+`/vk:access add-sender <peer_id> <your_id>`. Further DMs within 24h are
+silently dropped (per-sender rate limit).
+
+### Permission prompts go to terminal instead of VK
+
+No paired DM in `access.json`. Pair one via `/vk:access pair <code>`.
+Prompts route to the first `kind: "dm"` entry — no in-memory state required.
 
 ### Attachments missing from `inbox/`
 
-Check `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`. If the directory exists but is empty, look in `~/.claude/channels/vk/log/` for `attachment-download-failed` warnings — usually a VK CDN hiccup. Re-fetch by asking Claude to call `get_conversation_history` for the same `peer_id` — attachments resolve to local paths there too.
+Check `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`. Empty dir → look for
+`attachment-download-failed` in `~/.claude/channels/vk/log/` (usually a VK
+CDN hiccup). Re-fetch via `get_conversation_history` for the same `peer_id`.
 
 ### Tool returns `internal_error`
 
-Unknown server-side exception. The log carries the stack: `~/.claude/channels/vk/log/`. File an issue with the redacted log excerpt.
+Unknown server-side exception. Stack is in `~/.claude/channels/vk/log/`.
+File an issue with the redacted excerpt.
 
-### `/vk:configure` says the token saved but `connected` stays false
+### `/vk:configure` saved but `connected` stays false
 
-The plugin reads `.env` at **startup**, not on every request. After `/vk:configure`, exit and relaunch Claude. (`/healthz` will still report ok because the HTTP layer doesn't depend on the token.)
+`.env` is read at startup. Restart Claude. (`/healthz` reports ok regardless
+because the HTTP layer doesn't depend on the token.)
 
 ## Where things live
 
-| Thing                      | Path                                                        |
-| -------------------------- | ----------------------------------------------------------- |
-| Token + port + log level   | `~/.claude/channels/vk/.env`                                |
-| Allowlist + pairings       | `~/.claude/channels/vk/access.json`                         |
-| User cache                 | `~/.claude/channels/vk/peers.json`                          |
-| Downloaded attachments     | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`             |
-| Logs (Pino, daily-rotated) | `~/.claude/channels/vk/log/`                                |
-| Local management endpoints | `http://127.0.0.1:6060/{config,state,access/*}`, `/healthz` |
+| Thing                  | Path                                                        |
+| ---------------------- | ----------------------------------------------------------- |
+| Token, port, log level | `~/.claude/channels/vk/.env`                                |
+| Allowlist + pairings   | `~/.claude/channels/vk/access.json`                         |
+| User cache             | `~/.claude/channels/vk/peers.json`                          |
+| Attachments            | `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/`             |
+| Logs (Pino, rotated)   | `~/.claude/channels/vk/log/`                                |
+| Admin endpoints        | `http://127.0.0.1:6060/{config,state,access/*}`, `/healthz` |
 
 ## Reset everything
 
-Stop Claude, then:
+Stop Claude:
 
 ```bash
 rm -rf ~/.claude/channels/vk
 ```
 
-This wipes token, allowlist, cache, attachments, and logs. Reinstall: `/vk:configure <token>` and `/vk:access pair ...` from scratch. The plugin itself (under `~/.claude/plugins/`) is untouched.
+Wipes token, allowlist, cache, attachments, logs. Reinstall with
+`/vk:configure <token>` and re-pair. Plugin code (under `~/.claude/plugins/`)
+is untouched.

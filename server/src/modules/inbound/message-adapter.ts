@@ -13,7 +13,7 @@ export interface VkMessage {
   conversation_message_id?: number;
   text?: string;
   attachments?: VkMessageAttachment[];
-  reply_message?: { conversation_message_id?: number; id?: number };
+  reply_message?: { conversation_message_id?: number; id?: number; from_id?: number };
   /** Present when the user tapped an inline-keyboard button. */
   payload?: string;
 }
@@ -40,6 +40,7 @@ export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
   const msg = m ?? {};
   const messageId = msg.conversation_message_id ?? msg.id ?? 0;
   const replyCmid = msg.reply_message?.conversation_message_id ?? msg.reply_message?.id;
+  const replyFromId = msg.reply_message?.from_id;
   const attachments: Attachment[] = (msg.attachments ?? []).map((a) => ({
     type: a.type,
     url: pickAttachmentUrl(a),
@@ -53,6 +54,7 @@ export function vkMessageToInbound(m: VkMessage | undefined): InboundMessage {
     text: msg.text ?? "",
     attachments,
     reply_to: replyCmid,
+    reply_to_from_id: replyFromId,
     is_group_chat: isGroupChat(peerId),
     mentioned_bot: false,
     is_reply_to_bot: false,

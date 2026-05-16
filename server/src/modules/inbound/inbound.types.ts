@@ -16,6 +16,8 @@ export interface InboundMessage {
   text: string;
   attachments: Attachment[];
   reply_to?: number;
+  /** `from_id` of the quoted message — negative for community-sent messages. */
+  reply_to_from_id?: number;
   is_group_chat: boolean;
   /** Any attention signal: text mention or reply-to-bot. Used by `mention_only`. */
   mentioned_bot: boolean;

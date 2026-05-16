@@ -2,6 +2,7 @@ import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
+import { AccessStore } from "./access.store";
 import { CommunityResolver } from "./community-resolver";
 
 /**
@@ -10,7 +11,7 @@ import { CommunityResolver } from "./community-resolver";
  * into `InboundMessage.mentioned_bot`.
  */
 export interface MentionSignals {
-  /** Text contains `[club{ID}|...]` (canonical VK form) or `@<screen_name>`. */
+  /** Text contains `[club{ID}|...]`, `@<screen_name>`, or one of `access.json:mentionPatterns`. */
   name_mention: boolean;
   /** `reply_to` matches a cmid the bot sent to this peer recently. */
   reply_to_bot: boolean;
@@ -25,6 +26,9 @@ export interface MentionSignals {
 const CLUB_MENTION_RE = /\[club(\d+)\|[^\]]*\]/;
 const SCREEN_NAME_RE = /@([a-zA-Z0-9_.]+)/g;
 
+// The mention patterns are simple substrings rather than regexes
+const REGEX_META_RE = /[.*+?^${}()|[\]\\]/g;
+
 /**
  * Mention detection for group chats. The community ID and screen name come
  * from `config.current()` at call time (not constructor capture) so an .env
@@ -35,16 +39,18 @@ export class MentionDetector {
   constructor(
     private readonly recent: RecentSentMessages,
     private readonly community: CommunityResolver,
+    private readonly access: AccessStore,
   ) {}
 
   detect(msg: InboundMessage): MentionSignals {
     const identity = this.community.get();
     const communityId = identity?.id;
     const screenName = identity?.screenName?.toLowerCase();
+    const patterns = this.access.get().mentionPatterns;
 
     const signals: MentionSignals = {
-      name_mention: this.hasNameMention(msg.text, communityId, screenName),
-      reply_to_bot: this.isReplyToBot(msg.peer_id, msg.reply_to),
+      name_mention: this.hasNameMention(msg.text, communityId, screenName, patterns),
+      reply_to_bot: this.isReplyToBot(msg.peer_id, msg.reply_to, msg.reply_to_from_id, communityId),
       keyboard_payload: false,
     };
 
@@ -68,6 +74,7 @@ export class MentionDetector {
     text: string,
     communityId: string | undefined,
     screenName: string | undefined,
+    patterns: readonly string[],
   ): boolean {
     if (!text) return false;
 
@@ -84,12 +91,35 @@ export class MentionDetector {
       }
     }
 
+    for (const pattern of patterns) {
+      if (!pattern) {
+        continue;
+      }
+
+      // Explicit (?:^|\W) / (?=\W|$) boundaries — \b is unreliable for Cyrillic.
+      const re = new RegExp(`(?:^|\\W)${escapeRegex(pattern)}(?=\\W|$)`, "i");
+      if (re.test(text)) {
+        return true;
+      }
+    }
+
     return false;
   }
 
-  private isReplyToBot(peerId: number, replyToCmid: number | undefined): boolean {
+  private isReplyToBot(
+    peerId: number,
+    replyToCmid?: number,
+    replyToFromId?: number,
+    communityId?: string,
+  ): boolean {
     if (replyToCmid == null) {
       return false;
+    }
+
+    // Survives restart: VK gives us the quoted message's from_id, and the bot
+    // always posts as the community (negative of communityId).
+    if (replyToFromId != null && communityId && replyToFromId === -Number(communityId)) {
+      return true;
     }
 
     for (const entry of this.recent.all()) {
@@ -99,4 +129,8 @@ export class MentionDetector {
     }
     return false;
   }
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(REGEX_META_RE, "\\$&");
 }

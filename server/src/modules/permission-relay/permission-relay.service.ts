@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
+import { AccessStore } from "@/modules/access/access.store";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import type { ChannelNotifier } from "@/modules/inbound/notifier";
 import { MessagingService } from "@/modules/messaging/messaging.service";
@@ -24,18 +25,20 @@ interface DmActivator {
 }
 
 /**
- * MCP permission_request ↔ VK DM bridge. Outbound: DM the last activator with
- * Allow/Deny buttons. Inbound: button payload emits the verdict notification
- * and short-circuits the forwarding pipeline. State is in-memory.
+ * MCP permission_request ↔ VK DM bridge. Outbound: DM the first paired DM in
+ * `access.json` with Allow/Deny buttons. Inbound: button payload emits the
+ * verdict notification and short-circuits the forwarding pipeline.
  */
 @singleton()
 export class PermissionRelayService {
   private mcp: McpServer | null = null;
   private notifier: ChannelNotifier | null = null;
   private readonly pending = new Map<string, PendingRequest>();
-  private lastDmActivator: DmActivator | null = null;
 
-  constructor(private readonly messaging: MessagingService) {}
+  constructor(
+    private readonly messaging: MessagingService,
+    private readonly access: AccessStore,
+  ) {}
 
   setMcp(mcp: McpServer): void {
     this.mcp = mcp;
@@ -45,28 +48,22 @@ export class PermissionRelayService {
     this.notifier = notifier;
   }
 
-  /** Remember the most recent DM peer so a permission prompt can be routed. */
-  recordLastDmActivator(peer_id: number, from_id: number): void {
-    this.lastDmActivator = { peer_id, from_id };
-  }
-
   /**
-   * Entry point for the MCP notification handler. Routes the request to the
-   * last-known DM peer; if none is on file, surfaces a `<channel>` warning so
-   * Claude can fall back to the terminal prompt and the user knows why VK was
-   * skipped.
+   * Entry point for the MCP notification handler. Routes to the first paired
+   * DM in `access.json`; if none, surfaces a `<channel>` warning so Claude
+   * falls back to the terminal prompt.
    */
   async handleRequest(params: PermissionRequestParams): Promise<void> {
     this.sweepExpired();
 
-    const activator = this.lastDmActivator;
+    const activator = this.findFirstDmActivator();
     if (!activator) {
       logger.warn(
         { request_id: params.request_id },
-        "permission relay: no DM activator on file; cannot route",
+        "permission relay: no paired DM in access.json; cannot route",
       );
       await this.notifier?.warn(
-        `permission relay: no recent DM on file; cannot route request ${params.request_id} — using terminal prompt`,
+        `permission relay: no paired DM in access.json; cannot route request ${params.request_id} — pair a DM via /vk:access, falling back to terminal prompt`,
       );
       return;
     }
@@ -157,10 +154,33 @@ export class PermissionRelayService {
     return true;
   }
 
+  /**
+   * First `kind: "dm"` entry in `access.json` (insertion order). VK DM peer_id
+   * equals the user's id, so `from_id = peer_id` — that's what verdict-sender
+   * validation expects.
+   */
+  private findFirstDmActivator(): DmActivator | null {
+    const chats = this.access.get().chats;
+    for (const [key, entry] of Object.entries(chats)) {
+      if (entry.kind !== "dm") {
+        continue;
+      }
+
+      const peerId = Number(key);
+      if (!Number.isFinite(peerId) || peerId <= 0) {
+        continue;
+      }
+      return { peer_id: peerId, from_id: peerId };
+    }
+    return null;
+  }
+
   private sweepExpired(): void {
     const cutoff = Date.now() - PENDING_TTL_MS;
     for (const [id, p] of this.pending) {
-      if (p.created_at < cutoff) this.pending.delete(id);
+      if (p.created_at < cutoff) {
+        this.pending.delete(id);
+      }
     }
   }
 }
