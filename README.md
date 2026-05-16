@@ -29,7 +29,6 @@ Detailed walkthrough: [docs/setup.md](docs/setup.md).
    ```text
    /plugin marketplace add https://github.com/suxrobgm/claude-plugins
    /plugin install vk@sukhrob-claude-plugins
-   /reload-plugins
    ```
 
 3. **Save the token + launch with the channel:**

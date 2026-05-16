@@ -461,7 +461,6 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
    ```
    /plugin marketplace add github:you/your-marketplace
    /plugin install vk@your-marketplace
-   /reload-plugins
    ```
 6. **Relaunch with the development channels flag.** Exit your session and start a new one:
    ```

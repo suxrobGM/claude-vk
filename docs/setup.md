@@ -46,7 +46,6 @@ In any Claude Code session:
 ```text
 /plugin marketplace add https://github.com/suxrobgm/claude-plugins
 /plugin install vk@sukhrob-claude-plugins
-/reload-plugins
 ```
 
 The marketplace lives in a separate repo, [`claude-plugins`](https://github.com/suxrobgm/claude-plugins), which ships pre-bundled plugin artifacts — no `bun install` step on the user's machine. The `vk` plugin source (this repo) is built and synced into `claude-plugins/plugins/vk/` on each release.
