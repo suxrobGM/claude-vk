@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { container } from "@/common/di";
+import { AccessService } from "./access.service";
 import {
   AddGroupBodySchema,
   AddGroupResponseSchema,
@@ -21,8 +22,7 @@ import {
   SetMentionPolicyResponseSchema,
   SetPolicyBodySchema,
   SetPolicyResponseSchema,
-} from "./access.schema";
-import { AccessService } from "./access.service";
+} from "./schemas/http.schema";
 
 const access = container.resolve(AccessService);
 

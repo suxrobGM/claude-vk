@@ -1,22 +1,17 @@
 # Access control
 
-`claude-vk` gates every inbound message through a **two-layer allowlist**: the
-chat itself must be allowed, and within each allowed chat there is a per-chat
-list of trusted sender user IDs. The check runs on `from_id`, not `peer_id` —
-so a user trusted in a DM is not automatically trusted in a group chat.
+`claude-vk` gates every inbound message on `from_id`. The chat must be
+allowed; group chats additionally carry a per-chat sender allowlist and a
+mention-activation policy. DMs have one implicit sender, so no `senders[]`.
 
-Group chats get a third layer (mention activation) that decides which kinds
-of messages from an allowed sender actually wake Claude up.
+The two flows are deliberately different:
 
-The two access flows are deliberately different:
-
-- **DMs** are gated by a `dmPolicy` and can pair themselves automatically.
-- **Group chats** are off by default and have to be opted in by `peer_id`.
-  There is no group pairing flow.
+- **DMs** are gated by `dm_policy` and can pair themselves automatically.
+- **Group chats** are off by default — opt in by `peer_id`. No group pairing.
 
 ## Policies
 
-Set via `policy`. Default is `pairing`. `pairing` and `allowlist` only affect DMs (group chats are always opt-in by `peer_id`); `disabled` is a global kill switch that silences both.
+Set via `dm_policy`. Default is `pairing`. `pairing` and `allowlist` only affect DMs (group chats are always opt-in by `peer_id`); `disabled` is a global kill switch that silences both.
 
 | Policy      | Behavior                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -99,12 +94,11 @@ previous version live.
 ```json
 {
   "version": 1,
-  "policy": "pairing",
+  "dm_policy": "pairing",
   "chats": {
     "123456": {
       "kind": "dm",
       "title": "Ivan Petrov",
-      "senders": [123456],
       "added_at": "2026-05-14T10:21:00Z",
       "added_by": "pairing"
     },
@@ -129,11 +123,10 @@ previous version live.
 
 - Keys under `chats` are stringified `peer_id`s. DM peers are user IDs
   (`< 2_000_000_000`); group-chat peers are `>= 2_000_000_000`.
-- `senders` is an array of VK user IDs. **An empty `senders` array means
-  "no per-sender restriction" — anyone in this chat may message Claude.**
-  Group `add` leaves it empty unless `--allow` is supplied. DM pairing seeds
-  it with the DM peer's user id (a DM has only ever one possible sender
-  anyway).
+- `senders` (group chats only) is an array of VK user IDs. **An empty
+  `senders` array means "no per-sender restriction" — anyone in this chat may
+  message Claude.** Group `add` leaves it empty unless `--allow` is supplied.
+  DM entries omit the field entirely — a DM only ever has one sender.
 - `mention_policy` (group chats only): `mention_only` (default), `all`, or
   `reply_only`. The mention layer still applies even when `senders` is empty.
 - `pending_pairs` is the live DM pairing table. Codes are 6 chars from a
@@ -142,10 +135,10 @@ previous version live.
 ## Pairing flow (DM only)
 
 1. A user DMs the community on VK.
-2. If `dmPolicy=pairing` and the sender is unknown, the bot replies with a
+2. If `policy=pairing` and the sender is unknown, the bot replies with a
    6-character code and stores it in `pending_pairs`.
 3. The operator runs `/vk:access pair <code>` in their Claude session.
-4. The DM peer is added to `chats` with the sender's `user_id` in `senders`.
+4. The DM peer is added to `chats` as `{ kind: "dm" }`.
 
 Group chats never receive a pairing code automatically — adding the bot to
 a chat is not enough on its own. Use `/vk:access group add <peer_id>`.
@@ -182,8 +175,8 @@ The slash skill calls the local management API at
 | `group remove <peer_id>`                                 | Drop a group chat (alias of `remove-chat <peer_id>`). |
 | `list` / `list <peer_id>`                                | List allowed chats; per-chat sender detail.           |
 | `policy <pairing\|allowlist>`                            | Set DM policy.                                        |
-| `add-sender <peer_id> <user>`                            | Add user (numeric id or `@screen_name`) to a chat.    |
-| `remove-sender <peer_id> <user_id>`                      | Drop a sender from a chat.                            |
+| `add-sender <peer_id> <user>`                            | Add user (id or `@screen_name`) to a group chat.      |
+| `remove-sender <peer_id> <user_id>`                      | Drop a sender from a group chat.                      |
 | `remove-chat <peer_id>`                                  | Drop a chat entirely.                                 |
 | `mention-policy <peer_id> <policy>`                      | Group chats only.                                     |
 | `pending`                                                | List outstanding pairing codes.                       |

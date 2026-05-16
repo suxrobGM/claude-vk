@@ -394,7 +394,7 @@ The Anthropic channels reference is explicit: **gate on the sender's identity, n
 The plugin enforces this in `inbound/gate.ts`:
 
 1. **Chat layer.** Is this `peer_id` allowed at all? (DM peer or group chat in `access.json → chats`.) If not → drop silently.
-2. **Sender layer.** Is `from_id` allowed _for this chat_? Each chat entry has its own sender allowlist. A user being trusted in DM does not grant them trust in a group chat unless explicitly added.
+2. **Sender layer (group chats only).** Is `from_id` in the group chat's `senders` allowlist? DMs have one implicit sender (`peer_id == from_id`) so they skip this layer.
 3. **Activation layer (group chats only).** Per the chat's `mention_policy`: forward all messages, only `@`-mentions, or only replies-to-bot. Default `mention_only` to keep the chat quiet.
 
 Pseudocode:
@@ -402,9 +402,13 @@ Pseudocode:
 ```ts
 const chat = access.chats[msg.peer_id];
 if (!chat) return drop("chat-not-allowed");
-if (!chat.senders.includes(msg.from_id)) return drop("sender-not-allowed");
-if (msg.is_group_chat && chat.mention_policy === "mention_only" && !msg.mentioned_bot) {
-  return drop("no-mention");
+if (chat.kind === "group_chat") {
+  if (chat.senders.length > 0 && !chat.senders.includes(msg.from_id)) {
+    return drop("sender-not-allowed");
+  }
+  if (chat.mention_policy === "mention_only" && !msg.mentioned_bot) {
+    return drop("no-mention");
+  }
 }
 await emit(msg);
 ```
@@ -468,7 +472,7 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
    ```
    /vk:access pair <code>
    ```
-   This adds the DM peer to `access.json → chats` with the sender's `user_id` in its sender allowlist.
+   This adds the DM peer to `access.json → chats` as `{ kind: "dm" }`.
 8. **Add a group chat (optional).** Add the bot to a VK group chat, then opt it in by `peer_id` from Claude:
    ```
    /vk:access group add <peer_id>
@@ -488,17 +492,17 @@ The community ID and screen name are auto-resolved at startup from `groups.getBy
 
 ## 11. Access control
 
-The model is **two-layer**: a chat is either allowed or not, and within each allowed chat there is a list of trusted senders. This is a direct consequence of the channels reference's "gate on sender, not chat" guidance — applied to a platform that has _both_.
+A chat is either allowed or not. Group chats additionally carry a per-chat sender allowlist; DMs do not (a DM has one implicit sender). This is a direct consequence of the channels reference's "gate on sender, not chat" guidance — applied to a platform that has _both_.
 
 ### 11.1 Policies
 
-DMs have a `policy` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`. The `disabled` value is a global kill switch and silences both DMs and group chats.
+DMs have a `dm_policy` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`. The `disabled` value is a global kill switch and silences both DMs and group chats.
 
-| Policy      | Scope        | Behavior                                                                                                                              |
-| ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `pairing`   | DMs          | Unknown DM senders get a pairing-code reply. **Default.** Use to onboard new people.                                                  |
-| `allowlist` | DMs          | Only senders listed in their DM chat's `senders` array are forwarded. Anything else is dropped silently (or replied to once per 24h). |
-| `disabled`  | DMs + groups | Global kill switch — every inbound message is dropped silently (DMs and group chats, allowlisted or not).                             |
+| Policy      | Scope        | Behavior                                                                                                  |
+| ----------- | ------------ | --------------------------------------------------------------------------------------------------------- |
+| `pairing`   | DMs          | Unknown DM peers get a pairing-code reply. **Default.** Use to onboard new people.                        |
+| `allowlist` | DMs          | Only paired DM peers are forwarded. Anything else is dropped silently (or replied to once per 24h).       |
+| `disabled`  | DMs + groups | Global kill switch — every inbound message is dropped silently (DMs and group chats, allowlisted or not). |
 
 Group chats are off until the operator runs `/vk:access group add <peer_id>` — there is no group pairing flow and no group policy switch.
 
@@ -509,12 +513,11 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
 ```json
 {
   "version": 1,
-  "policy": "allowlist",
+  "dm_policy": "allowlist",
   "chats": {
     "123456": {
       "kind": "dm",
       "title": "Ivan Petrov",
-      "senders": [123456],
       "added_at": "2026-05-14T10:21:00Z",
       "added_by": "pairing"
     },
@@ -540,7 +543,7 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
 Notes:
 
 - Keys under `chats` are stringified `peer_id`s. DM peers are user IDs (`< 2_000_000_000`); group chat peers are `≥ 2_000_000_000` (VK's convention).
-- `senders` is an array of VK user IDs. **Pairing populates this with the inviting user only** — additional senders must be explicitly added.
+- `senders` (group chats only) is an array of VK user IDs. Empty means "any member of the chat may write." DM entries omit the field — a DM only ever has one sender.
 - `mention_policy` (group chats): `"mention_only"` (default), `"all"`, or `"reply_only"`. Controls activation, not access — a non-mention from an allowed sender is gated by activation policy and dropped silently when off.
 - `pending_pairs` is the live pairing-code table. TTL 10 min, single-use. Codes are 6 chars from a 32-char alphabet excluding `0/O/1/I/l`.
 
@@ -558,13 +561,13 @@ Notes:
 | Command                                                               | Action                                                                                                        |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `/vk:configure <token>`                                               | Writes `VK_TOKEN` into `~/.claude/channels/vk/.env` and prints the webhook URL + secret to paste into VK.     |
-| `/vk:access pair <code>`                                              | DM only. Consumes a pending pairing code; adds the DM peer to `chats` and the sender to its `senders`.        |
+| `/vk:access pair <code>`                                              | DM only. Consumes a pending pairing code; adds the DM peer to `chats`.                                        |
 | `/vk:access group add <peer_id> [--allow ids] [--mention-policy …]`   | Opt a group chat in. Optional `--allow` seeds the sender list; `--mention-policy` defaults to `mention_only`. |
 | `/vk:access group remove <peer_id>`                                   | Drop a group chat. Same effect as `remove-chat`.                                                              |
 | `/vk:access policy {pairing\|allowlist\|disabled}`                    | Set the DM policy. Group chats have no policy (always opt-in by `peer_id`).                                   |
 | `/vk:access list [--chats\|--senders <peer_id>]`                      | Lists allowlisted chats with resolved titles, or senders for a specific chat.                                 |
-| `/vk:access add-sender <peer_id> <user_id_or_@screen_name>`           | Adds a sender to a chat's allowlist. Resolves screen names.                                                   |
-| `/vk:access remove-sender <peer_id> <user_id>`                        | Removes a sender from a chat.                                                                                 |
+| `/vk:access add-sender <peer_id> <user_id_or_@screen_name>`           | Adds a sender to a **group chat**'s allowlist. Resolves screen names. DMs reject (single implicit sender).    |
+| `/vk:access remove-sender <peer_id> <user_id>`                        | Removes a sender from a group chat. DMs reject.                                                               |
 | `/vk:access remove-chat <peer_id>`                                    | Drops a chat entirely.                                                                                        |
 | `/vk:access mention-policy <peer_id> {mention_only\|all\|reply_only}` | Group chats only — controls activation, not access.                                                           |
 | `/vk:status`                                                          | Prints: transport, connection health, community handle, policies, chat count, sender count, last error.       |

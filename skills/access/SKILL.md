@@ -12,7 +12,7 @@ allowed-tools:
 Calls the local management API at `http://127.0.0.1:6060/access/*` to manage
 who can reach the VK channel.
 
-- **DMs** are gated by `dmPolicy` (`pairing` by default). Unknown DMs receive
+- **DMs** are gated by `dm_policy` (`pairing` by default). Unknown DMs receive
   a 6-character code; the operator runs `pair <code>` to approve.
 - **Group chats** are off by default. Opt each one in by `peer_id` with
   `group add <peer_id>` — there is no group pairing flow.
@@ -87,8 +87,7 @@ curl -s -X PUT http://127.0.0.1:6060/access/policy \
 
 ### `add-sender <peer_id> <user_id|@screen_name>`
 
-Either a numeric VK user id or an `@screen_name` works; the plugin resolves
-screen names via `users.get`. Applies to both DMs and group chats.
+Group chats only. Numeric id or `@screen_name`. DMs reject (single sender).
 
 ```bash
 # numeric

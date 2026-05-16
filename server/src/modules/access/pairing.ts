@@ -3,8 +3,8 @@ import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { MessagingService } from "@/modules/messaging/messaging.service";
-import type { ChatEntry, PendingPair } from "./access.schema";
 import { AccessStore } from "./access.store";
+import type { ChatEntry, PendingPair } from "./schemas/access-file.schema";
 
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // 32 chars, no 0/O/1/I/L
 const CODE_LENGTH = 6;
@@ -78,10 +78,9 @@ export class PairingService {
         return;
       }
 
-      // DMs always have a single sender (peer_id === from_id); seed it for clarity.
+      // A DM has exactly one possible sender (peer_id === from_id), so no senders[] is needed.
       const entry: ChatEntry = {
         kind: "dm",
-        senders: [pending.from_id],
         added_at: now.toISOString(),
         added_by: "pairing",
       };

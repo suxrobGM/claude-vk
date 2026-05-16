@@ -1,57 +1,7 @@
-import { t, type Static } from "elysia";
+import { t } from "elysia";
 import { NumericIdStringSchema, OkResponseSchema } from "@/types/common.schema";
-
-export const DmPolicySchema = t.Union([
-  t.Literal("pairing"),
-  t.Literal("allowlist"),
-  t.Literal("disabled"),
-]);
-
-export const ChatKindSchema = t.Union([t.Literal("dm"), t.Literal("group_chat")]);
-
-export const MentionPolicySchema = t.Union([
-  t.Literal("mention_only"),
-  t.Literal("all"),
-  t.Literal("reply_only"),
-]);
-
-export const ChatEntrySchema = t.Object({
-  kind: ChatKindSchema,
-  title: t.Optional(t.String()),
-  senders: t.Array(t.Integer()),
-  mention_policy: t.Optional(MentionPolicySchema),
-  added_at: t.String(),
-  added_by: t.Union([t.Literal("pairing"), t.Literal("manual")]),
-});
-
-export const PendingPairSchema = t.Object({
-  peer_id: t.Integer(),
-  from_id: t.Integer(),
-  expires_at: t.String(),
-});
-
-export const AccessFileSchema = t.Object({
-  version: t.Literal(1, { default: 1 }),
-  policy: DmPolicySchema,
-  chats: t.Record(t.String(), ChatEntrySchema),
-  pending_pairs: t.Record(t.String(), PendingPairSchema),
-});
-
-export type AccessFile = Static<typeof AccessFileSchema>;
-export type ChatEntry = Static<typeof ChatEntrySchema>;
-export type PendingPair = Static<typeof PendingPairSchema>;
-export type ChatKind = Static<typeof ChatKindSchema>;
-export type DmPolicy = Static<typeof DmPolicySchema>;
-export type MentionPolicy = Static<typeof MentionPolicySchema>;
-
-export const ACCESS_FILE_DEFAULTS: AccessFile = {
-  version: 1,
-  policy: "pairing",
-  chats: {},
-  pending_pairs: {},
-};
-
-/* ----- HTTP transport schemas (params / body / response) ----------------- */
+import { ChatEntrySchema, PendingPairSchema } from "./access-file.schema";
+import { ChatKindSchema, DmPolicySchema, MentionPolicySchema } from "./policy.schema";
 
 export const PeerIdParamSchema = t.Object({
   peer_id: NumericIdStringSchema,

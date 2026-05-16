@@ -4,7 +4,11 @@ import { PluginError } from "@/common/errors";
 import { logger } from "@/common/logger";
 import { JsonStore } from "@/state/json-store";
 import { accessPath } from "@/state/paths";
-import { ACCESS_FILE_DEFAULTS, AccessFileSchema, type AccessFile } from "./access.schema";
+import {
+  ACCESS_FILE_DEFAULTS,
+  AccessFileSchema,
+  type AccessFile,
+} from "./schemas/access-file.schema";
 
 const RELOAD_DEBOUNCE_MS = 100;
 
