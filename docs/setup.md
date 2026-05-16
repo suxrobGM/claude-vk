@@ -83,36 +83,38 @@ DM your community on VK. The bot replies with a 6-character pairing code (10-min
 
 `access.json` now contains your DM peer with your `user_id` in its sender list.
 
-## 10. Pair a group chat (optional)
+## 10. Add a group chat (optional)
 
-Add the bot to a VK group chat. From inside the chat, type:
-
-```text
-@<community_screen_name> pair
-```
-
-The bot DMs the code to the user who ran the command. Consume it the same way:
+Add the bot to a VK group chat, then opt the chat in by `peer_id` from Claude:
 
 ```text
-/vk:access pair <code>
+/vk:access group add <peer_id>
 ```
 
-The chat now appears in `access.json` with the inviting user as its only allowed sender. Add more allowed senders:
+VK group-chat peer ids are `>= 2_000_000_000`. The chat now appears in `access.json` with `senders=[]` (anyone in the chat may write to the bot) and `mention_policy=mention_only`. Lock it down further with optional flags:
+
+```text
+/vk:access group add <peer_id> --allow id1,id2 --mention-policy reply_only
+```
+
+Or modify after the fact:
 
 ```text
 /vk:access add-sender <peer_id> <user_id_or_@screen_name>
+/vk:access mention-policy <peer_id> all
 ```
+
+Group chats have no pairing flow — they're always opt-in by `peer_id`.
 
 ## 11. Lock down
 
-Both peer-types default to `pairing`. Once you've paired everyone you intend to allow, switch to `allowlist`:
+DMs default to `pairing`. Once you've paired everyone you intend to allow, switch to `allowlist`:
 
 ```text
-/vk:access policy dm allowlist
-/vk:access policy group_chat allowlist
+/vk:access policy allowlist
 ```
 
-Under `allowlist`, unknown DMs get a single short "ask the operator" reply (rate-limited per sender, once per 24h). Unknown group-chat messages are dropped silently.
+Under `allowlist`, unknown DMs get a single short "ask the operator" reply (rate-limited per sender, once per 24h). Group chats are already opt-in by `peer_id` — unknown group messages are always dropped silently.
 
 ## 12. Verify
 

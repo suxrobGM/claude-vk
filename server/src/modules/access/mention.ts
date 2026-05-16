@@ -81,12 +81,3 @@ export class MentionDetector {
     return false;
   }
 }
-
-/**
- * Pair-command test for group chats. PRD §11.3: a fresh group chat only
- * earns a pairing code when someone explicitly types `@<community> pair`.
- * Lives next to `MentionDetector` because it operates on the same signals.
- */
-export function isPairCommand(msg: InboundMessage, signals: MentionSignals): boolean {
-  return signals.name_mention && /\bpair\b/i.test(msg.text);
-}

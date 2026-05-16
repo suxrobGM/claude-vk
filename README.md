@@ -50,8 +50,13 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
    Optional lock-down once paired:
 
    ```text
-   /vk:access policy dm allowlist
-   /vk:access policy group_chat allowlist
+   /vk:access policy allowlist
+   ```
+
+   To use the bot in a group chat, opt the chat in by `peer_id` (no pairing flow):
+
+   ```text
+   /vk:access group add <peer_id>
    ```
 
 Run `/vk:status` to confirm the channel is connected.
@@ -62,7 +67,7 @@ Run `/vk:status` to confirm the channel is connected.
 - **Group chats with mention policy.** Add the bot to a VK group chat; it stays silent until `@`-mentioned (default) or replied to.
 - **Permission relay.** When Claude wants to run a permission-gated tool, you get a DM with a 5-letter request ID. Reply `yes a7k4m` / `no a7k4m` from your phone.
 - **Attachments auto-download** to `~/.claude/channels/vk/inbox/<peer_id>/<cmid>/` so Claude can `Read` photos, docs, and voice messages.
-- **Two-layer access gate.** Chat allowlist + per-chat sender allowlist — applied to both DMs and group chats. See [docs/access.md](docs/access.md).
+- **Two-layer access gate.** Chat allowlist + per-chat sender allowlist — applied to both DMs and group chats. DMs auto-pair; group chats opt in via `/vk:access group add <peer_id>`. See [ACCESS.md](ACCESS.md).
 - **Long-poll only.** No public URL, no reverse proxy, works behind NAT.
 
 ## MCP tools
@@ -93,7 +98,7 @@ Full tool reference: [docs/tools.md](docs/tools.md).
 ## Documentation
 
 - [Full setup walkthrough](docs/setup.md)
-- [Access control](docs/access.md)
+- [Access control](ACCESS.md)
 - [MCP tool reference](docs/tools.md)
 - [Troubleshooting](docs/troubleshooting.md)
 

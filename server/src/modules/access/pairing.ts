@@ -3,19 +3,15 @@ import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { MessagingService } from "@/modules/messaging/messaging.service";
-import type { ChatEntry, ChatKind, PendingPair } from "./access.schema";
+import type { ChatEntry, PendingPair } from "./access.schema";
 import { AccessStore } from "./access.store";
 
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // 32 chars, no 0/O/1/I/L
 const CODE_LENGTH = 6;
-const TTL_MS = 10 * 60 * 1000;
+const TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-function pairingMessage(code: string, kind: ChatKind): string {
-  const base = `Hi! I'm a Claude Code assistant. To connect this chat, the operator runs:\n\n    /vk:access pair ${code}\n\n…in their Claude session. The code expires in 10 minutes.`;
-  if (kind === "group_chat") {
-    return `${base}\n\nThis is a group chat: mention me with \`@<community> <message>\` or reply to one of my messages to talk to me afterwards.`;
-  }
-  return base;
+function pairingMessage(code: string): string {
+  return `Hi! I'm a Claude Code assistant. To connect this chat, the operator runs:\n\n    /vk:access pair ${code}\n\n…in their Claude session. The code expires in 10 minutes.`;
 }
 
 export type ConsumeResult =
@@ -23,10 +19,9 @@ export type ConsumeResult =
   | { ok: false; reason: "unknown" | "expired" };
 
 /**
- * Generates pairing codes, sends them as DMs, and consumes them atomically.
- * The code lives in `access.json → pending_pairs` so a process restart
- * doesn't invalidate an in-flight pairing; expired entries are swept on
- * every consume() so the file doesn't grow unbounded.
+ * DM-only pairing: emits a 6-char code to unknown DMs and consumes it via
+ * the admin API. Codes survive restarts (stored in `access.json`) and are
+ * swept on every consume(). Group chats use `/vk:access group add` instead.
  */
 @singleton()
 export class PairingService {
@@ -37,22 +32,28 @@ export class PairingService {
 
   /** Generates a code, writes it to pending_pairs, and DMs the originating peer. */
   async emitCode(msg: InboundMessage): Promise<void> {
+    if (msg.is_group_chat) {
+      logger.warn(
+        { peer_id: msg.peer_id },
+        "pairing.emitCode called for a group chat — ignored (groups use explicit add)",
+      );
+      return;
+    }
+
     const code = generateCode();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + TTL_MS);
-    const kind: ChatKind = msg.is_group_chat ? "group_chat" : "dm";
 
     await this.access.update((draft) => {
       sweepExpired(draft.pending_pairs, now);
       draft.pending_pairs[code] = {
         peer_id: msg.peer_id,
         from_id: msg.from_id,
-        kind,
         expires_at: expiresAt.toISOString(),
       };
     });
 
-    const text = pairingMessage(code, kind);
+    const text = pairingMessage(code);
     const result = await this.messaging.send({ peer_id: msg.peer_id, text });
     if (!result.ok) {
       logger.warn(
@@ -64,7 +65,7 @@ export class PairingService {
     logger.info({ peer_id: msg.peer_id, code }, "pairing code emitted");
   }
 
-  /** Atomic consume: validate, sweep expired, install chat, clear pending entry. */
+  /** Atomic consume: validate, sweep expired, install DM chat, clear pending entry. */
   async consume(code: string): Promise<ConsumeResult> {
     let outcome: ConsumeResult = { ok: false, reason: "unknown" };
     await this.access.update((draft) => {
@@ -77,12 +78,10 @@ export class PairingService {
         return;
       }
 
-      // Group-chat pairing leaves `senders` empty — the gate treats that as
-      // "anyone in this chat may message Claude". DMs always have a single
-      // sender (peer_id === from_id), so we seed it for clarity.
+      // DMs always have a single sender (peer_id === from_id); seed it for clarity.
       const entry: ChatEntry = {
-        kind: pending.kind,
-        senders: pending.kind === "group_chat" ? [] : [pending.from_id],
+        kind: "dm",
+        senders: [pending.from_id],
         added_at: now.toISOString(),
         added_by: "pairing",
       };

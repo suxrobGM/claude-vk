@@ -45,7 +45,7 @@ The plugin couldn't reach VK's long-poll server. Causes:
 
 Walk through these in order:
 
-1. **Is the chat allowlisted?** `/vk:access list` should show its `peer_id`. If not, pair it: from inside the chat type `@<community> pair`, then `/vk:access pair <code>` in Claude.
+1. **Is the chat allowlisted?** `/vk:access list` should show its `peer_id`. If not, opt the group in: `/vk:access group add <peer_id>` (group chats no longer pair — they have to be added explicitly by `peer_id`).
 2. **Is your user listed for that chat?** `/vk:access list <peer_id>`. Add yourself: `/vk:access add-sender <peer_id> <your_user_id>`.
 3. **Is the message activating the chat?** Default `mention_policy` is `mention_only` — the bot ignores everything that isn't `@<community>` or a reply to one of its own messages. Mention it explicitly, or change policy: `/vk:access mention-policy <peer_id> all`.
 4. **Is privacy mode hiding the message from VK?** In community settings, "Read all messages" off means VK only delivers mentions and replies. That's fine if your `mention_policy` agrees, but if you want everything, turn it on.
@@ -57,7 +57,7 @@ You DM'd the bot and got nothing back. Causes:
 1. **Token missing `messages` scope.** Regenerate with `messages, photos, docs, manage`.
 2. **Long-poll not connected.** `/vk:status` will show `connected: false`. Fix that first.
 3. **You blocked the bot.** Unblock the community in VK settings.
-4. **Allowlist policy + chat not on the list.** Pairing only emits codes under `pairing` policy. Switch back temporarily: `/vk:access policy dm pairing`.
+4. **Allowlist policy + DM not on the list.** Pairing only emits codes under `pairing` policy. Switch back temporarily: `/vk:access policy pairing`.
 
 ### "This bot is locked to specific users" reply
 

@@ -1,16 +1,11 @@
 import { t, type Static } from "elysia";
 import { NumericIdStringSchema, OkResponseSchema } from "@/types/common.schema";
 
-/**
- * Persistent shape of `~/.claude/channels/vk/access.json`. The DM half is
- * fully exercised in M2/M3; the group-chat half (M4) is already shaped here
- * so the gate, pairing, and admin controller don't have to grow new branches
- * later — they just stop dropping `is_group_chat` paths.
- */
-
-export const PolicySchema = t.Union([t.Literal("pairing"), t.Literal("allowlist")]);
-export const DmPolicySchema = PolicySchema;
-export const GroupChatPolicySchema = PolicySchema;
+export const DmPolicySchema = t.Union([
+  t.Literal("pairing"),
+  t.Literal("allowlist"),
+  t.Literal("disabled"),
+]);
 
 export const ChatKindSchema = t.Union([t.Literal("dm"), t.Literal("group_chat")]);
 
@@ -32,7 +27,6 @@ export const ChatEntrySchema = t.Object({
 export const PendingPairSchema = t.Object({
   peer_id: t.Integer(),
   from_id: t.Integer(),
-  kind: ChatKindSchema,
   expires_at: t.String(),
 });
 
@@ -40,7 +34,6 @@ export const AccessFileSchema = t.Object({
   version: t.Literal(1, { default: 1 }),
   policies: t.Object({
     dm: DmPolicySchema,
-    group_chat: GroupChatPolicySchema,
   }),
   chats: t.Record(t.String(), ChatEntrySchema),
   pending_pairs: t.Record(t.String(), PendingPairSchema),
@@ -51,12 +44,11 @@ export type ChatEntry = Static<typeof ChatEntrySchema>;
 export type PendingPair = Static<typeof PendingPairSchema>;
 export type ChatKind = Static<typeof ChatKindSchema>;
 export type DmPolicy = Static<typeof DmPolicySchema>;
-export type GroupChatPolicy = Static<typeof GroupChatPolicySchema>;
 export type MentionPolicy = Static<typeof MentionPolicySchema>;
 
 export const ACCESS_FILE_DEFAULTS: AccessFile = {
   version: 1,
-  policies: { dm: "pairing", group_chat: "pairing" },
+  policies: { dm: "pairing" },
   chats: {},
   pending_pairs: {},
 };
@@ -72,17 +64,13 @@ export const PeerIdSenderParamSchema = t.Object({
   user_id: NumericIdStringSchema,
 });
 
-export const PeerTypeParamSchema = t.Object({
-  peer_type: t.Union([t.Literal("dm"), t.Literal("group_chat")]),
-});
-
 export const AddSenderBodySchema = t.Object({
   user_id: t.Optional(t.Integer()),
   screen_name: t.Optional(t.String({ minLength: 1 })),
 });
 
 export const SetPolicyBodySchema = t.Object({
-  policy: t.Union([DmPolicySchema, GroupChatPolicySchema]),
+  policy: DmPolicySchema,
 });
 
 export const SetMentionPolicyBodySchema = t.Object({
@@ -91,6 +79,13 @@ export const SetMentionPolicyBodySchema = t.Object({
 
 export const ConsumePairingBodySchema = t.Object({
   code: t.String({ minLength: 6, maxLength: 6 }),
+});
+
+export const AddGroupBodySchema = t.Object({
+  peer_id: t.Integer(),
+  title: t.Optional(t.String({ minLength: 1 })),
+  allow: t.Optional(t.Array(t.Integer())),
+  mention_policy: t.Optional(MentionPolicySchema),
 });
 
 export const ChatSummarySchema = t.Object({
@@ -130,15 +125,11 @@ export const RemoveChatResponseSchema = t.Composite([
 
 export const PoliciesResponseSchema = t.Object({
   dm: DmPolicySchema,
-  group_chat: GroupChatPolicySchema,
 });
 
 export const SetPolicyResponseSchema = t.Composite([
   OkResponseSchema,
-  t.Object({
-    peer_type: t.Union([t.Literal("dm"), t.Literal("group_chat")]),
-    policy: t.Union([DmPolicySchema, GroupChatPolicySchema]),
-  }),
+  t.Object({ dm: DmPolicySchema }),
 ]);
 
 export const SetMentionPolicyResponseSchema = t.Composite([
@@ -150,6 +141,11 @@ export const SetMentionPolicyResponseSchema = t.Composite([
 ]);
 
 export const ConsumePairingOkSchema = t.Composite([
+  OkResponseSchema,
+  t.Object({ peer_id: t.Integer(), chat: ChatEntrySchema }),
+]);
+
+export const AddGroupResponseSchema = t.Composite([
   OkResponseSchema,
   t.Object({ peer_id: t.Integer(), chat: ChatEntrySchema }),
 ]);

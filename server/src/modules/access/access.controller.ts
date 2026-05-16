@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { container } from "@/common/di";
 import {
+  AddGroupBodySchema,
+  AddGroupResponseSchema,
   AddSenderBodySchema,
   AddSenderResponseSchema,
   ChatDetailResponseSchema,
@@ -9,7 +11,6 @@ import {
   ConsumePairingOkSchema,
   PeerIdParamSchema,
   PeerIdSenderParamSchema,
-  PeerTypeParamSchema,
   PendingPairingsResponseSchema,
   PoliciesResponseSchema,
   RemoveChatResponseSchema,
@@ -84,21 +85,27 @@ export const accessController = new Elysia({
       response: SetMentionPolicyResponseSchema,
     },
   )
-  .get("/policies", () => access.getPolicies(), {
+  .post(
+    "/groups",
+    async ({ body, set }) => {
+      const added = await access.addGroup(body);
+      set.headers["Location"] = `/admin/access/chats/${added.peer_id}`;
+      set.status = 201;
+      return { ok: true as const, ...added };
+    },
+    { body: AddGroupBodySchema, response: AddGroupResponseSchema },
+  )
+  .get("/policy", () => access.getPolicies(), {
     response: PoliciesResponseSchema,
-    detail: { summary: "Read current DM + group_chat policies." },
+    detail: { summary: "Read current DM policy." },
   })
   .put(
-    "/policies/:peer_type",
-    async ({ params, body }) => {
-      const updated = await access.setPolicy(params.peer_type, body.policy);
+    "/policy",
+    async ({ body }) => {
+      const updated = await access.setDmPolicy(body.policy);
       return { ok: true as const, ...updated };
     },
-    {
-      params: PeerTypeParamSchema,
-      body: SetPolicyBodySchema,
-      response: SetPolicyResponseSchema,
-    },
+    { body: SetPolicyBodySchema, response: SetPolicyResponseSchema },
   )
   .post(
     "/pairings",

@@ -1,14 +1,8 @@
 import { singleton } from "tsyringe";
 import { BadRequestError, NotFoundError } from "@/common/errors";
+import { isGroupChat } from "@/common/utils/peer";
 import { UsersCache } from "@/modules/users/users.cache";
-import type {
-  ChatEntry,
-  ChatKind,
-  DmPolicy,
-  GroupChatPolicy,
-  MentionPolicy,
-  PendingPair,
-} from "./access.schema";
+import type { ChatEntry, ChatKind, DmPolicy, MentionPolicy, PendingPair } from "./access.schema";
 import { AccessStore } from "./access.store";
 import { PairingService } from "./pairing";
 
@@ -19,6 +13,13 @@ export interface ChatSummary {
   sender_count: number;
   added_at: string;
   added_by: "pairing" | "manual";
+}
+
+export interface AddGroupInput {
+  peer_id: number;
+  title?: string;
+  allow?: number[];
+  mention_policy?: MentionPolicy;
 }
 
 /**
@@ -103,24 +104,44 @@ export class AccessService {
     });
   }
 
+  /** Explicit group-chat registration. Idempotent. Throws {@link BadRequestError} if `peer_id` is not a group-chat id. */
+  async addGroup(input: AddGroupInput) {
+    if (!isGroupChat(input.peer_id)) {
+      throw new BadRequestError("not-a-group-chat-peer-id");
+    }
+    const key = String(input.peer_id);
+    const now = new Date().toISOString();
+    const entry: ChatEntry = {
+      kind: "group_chat",
+      senders: input.allow ? Array.from(new Set(input.allow)) : [],
+      mention_policy: input.mention_policy ?? "mention_only",
+      added_at: now,
+      added_by: "manual",
+      ...(input.title ? { title: input.title } : {}),
+    };
+    await this.store.update((draft) => {
+      draft.chats[key] = entry;
+    });
+    return { peer_id: input.peer_id, chat: entry };
+  }
+
   private requireChat(peerId: string): ChatEntry {
     const chat = this.store.get().chats[peerId];
     if (!chat) throw new NotFoundError("chat-not-allowed");
     return chat;
   }
 
-  /** Read both peer-type policies. */
-  getPolicies(): { dm: DmPolicy; group_chat: GroupChatPolicy } {
-    return this.store.get().policies;
+  /** Read the DM policy. */
+  getPolicies(): { dm: DmPolicy } {
+    return { dm: this.store.get().policies.dm };
   }
 
-  /** Set the policy for one peer-type. */
-  async setPolicy(peerType: "dm" | "group_chat", policy: DmPolicy | GroupChatPolicy) {
+  /** Set the DM policy. */
+  async setDmPolicy(policy: DmPolicy) {
     await this.store.update((draft) => {
-      if (peerType === "dm") draft.policies.dm = policy as DmPolicy;
-      else draft.policies.group_chat = policy as GroupChatPolicy;
+      draft.policies.dm = policy;
     });
-    return { peer_type: peerType, policy };
+    return { dm: policy };
   }
 
   /**

@@ -48,13 +48,11 @@ Two persistent files only — both under `~/.claude/channels/vk/` (path fixed at
 - `access.json` — policies, chats, senders, mention policies, pending pair codes. Watched via `fs.watch`, hot-reloaded.
 - `peers.json` — VK user/group metadata cache (TTL 1h, LRU 10k).
 
-No `state.json`. The long-poll cursor is owned by `vk-io` (in-memory; a restart starts from VK's current `ts` and may briefly miss in-flight events, which is acceptable), and the recent-sent-cmid ring (`RecentSentMessages`) lives in process memory too.
+**Access + mention.** Three-layer gate in [access/access.gate.ts](server/src/modules/access/access.gate.ts): chat allowlist → per-chat senders → mention-policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). Mention signals in [access/mention.ts](server/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved).
 
-**Access + mention.** Three-layer gate in [access/access.gate.ts](server/src/modules/access/access.gate.ts): chat allowlist → per-chat senders → mention-policy (group chats only). Gate on **`from_id`, not `peer_id`** (PRD §9.4). Mention signals in [access/mention.ts](server/src/modules/access/mention.ts) — `name_mention` (`[club{ID}|...]` or `@screen_name`), `reply_to_bot` (cmid in `RecentSentMessages`), `keyboard_payload` (reserved). `isPairCommand` requires explicit `@<community> pair` — group chats never auto-emit codes.
+Policies: only DMs have one (`policies.dm` = `pairing` (default) or `allowlist`). Group chats are off by default and opt in by `peer_id` via `POST /admin/access/groups` (`/vk:access group add`); they have no pairing flow. Full surface in [ACCESS.md](ACCESS.md).
 
-Policies: DM and group chat each take `pairing` (default) or `allowlist`. No `open` policy.
-
-**Inbound.** [inbound/long-poll.service.ts](server/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` — auto-resolves the bound group ID, owns the poll cursor + key-expired refresh. We layer on a connect-backoff loop (1s→30s, code 5 fatal) and a `message_new` handler that converts via [`vkMessageToInbound`](server/src/modules/inbound/message-adapter.ts) and dispatches into [`InboundService.handle`](server/src/modules/inbound/inbound.service.ts). Pipeline: `mention enrich → gate → (drop | pair | permission verdict | download + notify)`. Never throws — every failure is logged and the poll loop continues. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
+**Inbound.** [inbound/long-poll.service.ts](server/src/modules/inbound/long-poll.service.ts) wraps `vk-io`'s `updates.start()` — auto-resolves the bound group ID, owns the poll cursor + key-expired refresh. We layer on a connect-backoff loop (1s→30s, code 5 fatal) and a `message_new` handler that converts via [`vkMessageToInbound`](server/src/modules/inbound/message-adapter.ts) and dispatches into [`InboundService.handle`](server/src/modules/inbound/inbound.service.ts). Pipeline: `mention enrich → gate → (drop | DM pair | permission verdict | download + notify)`. Only DMs ever reach `need_pair`; group chats are silently dropped until added. Never throws — every failure is logged and the poll loop continues. Notifier emits `<channel source="vk" ...>` with `mentioned` + `reply_to_bot` meta. Group chats default to `mention_only`.
 
 **Peer IDs.** `peer_id ≥ 2_000_000_000` = group chat. Use `isGroupChat()` from [common/utils/peer.ts](server/src/common/utils/peer.ts).
 
@@ -69,7 +67,3 @@ Policies: DM and group chat each take `pairing` (default) or `allowlist`. No `op
 - `MessagingService.send` feeds every outbound `cmid` into `RecentSentMessages.push` so reply-to-bot can resolve it.
 - Import from concrete files (`./mention`, `@/modules/access/access.controller`) — never module barrels.
 - No emojis in code or commits unless asked.
-
-## Platform notes
-
-Developed on Windows (PowerShell). `chmod` failures are no-oped on Windows in `json-store.ts` + `env.ts` — don't hard-fail there.

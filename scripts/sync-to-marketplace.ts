@@ -19,6 +19,7 @@ const ITEMS: Array<[from: string, to: string]> = [
   [".claude-plugin/plugin.json", ".claude-plugin/plugin.json"],
   [".mcp.json", ".mcp.json"],
   ["skills", "skills"],
+  ["ACCESS.md", "ACCESS.md"],
 ];
 
 function fail(message: string): never {

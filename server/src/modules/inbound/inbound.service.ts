@@ -1,7 +1,7 @@
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { AccessGate } from "@/modules/access/access.gate";
-import { isPairCommand, MentionDetector } from "@/modules/access/mention";
+import { MentionDetector } from "@/modules/access/mention";
 import { PairingService } from "@/modules/access/pairing";
 import { MessagingService } from "@/modules/messaging/messaging.service";
 import { PermissionRelayService } from "@/modules/permission-relay/permission-relay.service";
@@ -60,9 +60,7 @@ export class InboundService {
         return;
       }
       if (verdict.kind === "need_pair") {
-        // Group chats need an explicit `@<community> pair` trigger; otherwise
-        // the bot would spam codes the moment it joins. DMs auto-emit.
-        if (msg.is_group_chat && !isPairCommand(msg, signals)) return;
+        // Only DMs ever reach `need_pair`; groups are opt-in via `/vk:access group add`.
         await this.pairing.emitCode(msg);
         return;
       }

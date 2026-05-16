@@ -37,7 +37,7 @@ describe("AccessGate.check", () => {
 
   it("denies unknown DM peer under allowlist policy with a reply", () => {
     const gate = new AccessGate(
-      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "allowlist", group_chat: "pairing" } }),
+      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "allowlist" } }),
     );
     const r = gate.check(makeMsg());
     expect(r.kind).toBe("deny_with_reply");
@@ -46,7 +46,7 @@ describe("AccessGate.check", () => {
 
   it("silently drops unknown group-chat peer under allowlist policy", () => {
     const gate = new AccessGate(
-      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "pairing", group_chat: "allowlist" } }),
+      makeStore({ ...ACCESS_FILE_DEFAULTS, policies: { dm: "pairing" } }),
     );
     const r = gate.check(makeMsg({ peer_id: GROUP_PEER, is_group_chat: true }));
     expect(r.kind).toBe("drop");
@@ -57,7 +57,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "allowlist", group_chat: "pairing" },
+        policies: { dm: "allowlist" },
         chats: {
           "100": {
             kind: "dm",
@@ -75,7 +75,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "allowlist", group_chat: "pairing" },
+        policies: { dm: "allowlist" },
         chats: {
           "100": {
             kind: "dm",
@@ -95,7 +95,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -133,7 +133,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -156,7 +156,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -179,7 +179,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -208,7 +208,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -236,7 +236,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -253,18 +253,18 @@ describe("AccessGate.check", () => {
     ).toBe("allow");
   });
 
-  it("allows any sender when group-chat senders[] is empty (post-pair default)", () => {
+  it("allows any sender when group-chat senders[] is empty (post-add default)", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "pairing" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
-            senders: [], // pairing leaves this empty for group chats
+            senders: [], // explicit `group add` may leave this empty
             mention_policy: "all",
             added_at: new Date().toISOString(),
-            added_by: "pairing",
+            added_by: "manual",
           },
         },
       }),
@@ -278,7 +278,7 @@ describe("AccessGate.check", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "pairing" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",
@@ -297,11 +297,52 @@ describe("AccessGate.check", () => {
     if (r.kind === "drop") expect(r.reason).toBe("no-mention");
   });
 
+  it("silently drops every DM under disabled policy, even allowlisted senders", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "disabled" },
+        chats: {
+          "100": {
+            kind: "dm",
+            senders: [100],
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    const r = gate.check(makeMsg());
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("disabled");
+  });
+
+  it("disabled policy also drops allowed group chats (global kill switch)", () => {
+    const gate = new AccessGate(
+      makeStore({
+        ...ACCESS_FILE_DEFAULTS,
+        policies: { dm: "disabled" },
+        chats: {
+          [String(GROUP_PEER)]: {
+            kind: "group_chat",
+            senders: [555],
+            mention_policy: "all",
+            added_at: new Date().toISOString(),
+            added_by: "manual",
+          },
+        },
+      }),
+    );
+    const r = gate.check(makeMsg({ peer_id: GROUP_PEER, from_id: 555, is_group_chat: true }));
+    expect(r.kind).toBe("drop");
+    if (r.kind === "drop") expect(r.reason).toBe("disabled");
+  });
+
   it("defaults to mention_only when chat has no mention_policy set", () => {
     const gate = new AccessGate(
       makeStore({
         ...ACCESS_FILE_DEFAULTS,
-        policies: { dm: "pairing", group_chat: "allowlist" },
+        policies: { dm: "pairing" },
         chats: {
           [String(GROUP_PEER)]: {
             kind: "group_chat",

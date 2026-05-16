@@ -4,7 +4,7 @@ import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
 import type { VkClient } from "@/vk/client";
 import { CommunityResolver, type CommunityIdentity } from "./community-resolver";
-import { isPairCommand, MentionDetector } from "./mention";
+import { MentionDetector } from "./mention";
 
 function makeRecent(
   entries: { peer_id: number; conversation_message_id: number }[],
@@ -84,28 +84,5 @@ describe("MentionDetector.detect", () => {
     const det = makeDetector(makeRecent([]));
     const sig = det.detect(makeMsg({ text: "" }));
     expect(sig.keyboard_payload).toBe(false);
-  });
-});
-
-describe("isPairCommand", () => {
-  it("returns true only when name_mention + 'pair' keyword present", () => {
-    const msg = makeMsg({ text: "@claudebot pair me please" });
-    expect(
-      isPairCommand(msg, { name_mention: true, reply_to_bot: false, keyboard_payload: false }),
-    ).toBe(true);
-  });
-
-  it("returns false without a name mention", () => {
-    const msg = makeMsg({ text: "pair me" });
-    expect(
-      isPairCommand(msg, { name_mention: false, reply_to_bot: true, keyboard_payload: false }),
-    ).toBe(false);
-  });
-
-  it("returns false without the 'pair' keyword", () => {
-    const msg = makeMsg({ text: "@claudebot ping" });
-    expect(
-      isPairCommand(msg, { name_mention: true, reply_to_bot: false, keyboard_payload: false }),
-    ).toBe(false);
   });
 });

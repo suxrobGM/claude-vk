@@ -181,7 +181,7 @@ claude-vk/
 │   └── vk/SKILL.md                       # how Claude should use the tools
 ├── commands/
 │   ├── configure.md                      # /vk:configure
-│   ├── access.md                         # /vk:access
+│   ├── access.md                         # /vk:access (now /skills/access/SKILL.md)
 │   └── status.md                         # /vk:status
 └── server/
     ├── package.json                      # name: "@claude-vk/server"
@@ -469,16 +469,18 @@ Inbound photos/voice/docs are downloaded eagerly to `~/.claude/channels/vk/inbox
    /vk:access pair <code>
    ```
    This adds the DM peer to `access.json → chats` with the sender's `user_id` in its sender allowlist.
-8. **Pair (group chat use, optional).** Add the bot to a VK group chat. From inside the chat, type `@<community_screen_name> pair` — the bot replies with a 6-character code. In Claude:
+8. **Add a group chat (optional).** Add the bot to a VK group chat, then opt it in by `peer_id` from Claude:
    ```
-   /vk:access pair <code>
+   /vk:access group add <peer_id>
    ```
-   Adds the chat's `peer_id` to `access.json → chats` and the _inviting user's_ `user_id` to that chat's sender allowlist. Add more allowed senders later with `/vk:access add-sender <peer_id> <user_id>`.
-9. **Lock it down.**
+   Adds the chat to `access.json → chats` with `senders=[]` (anyone in the chat may write) and `mention_policy=mention_only`. Lock it down by passing `--allow id1,id2` and/or `--mention-policy {mention_only|all|reply_only}`. There is no group pairing flow.
+9. **Lock DMs down.**
+
    ```
-   /vk:access policy dm allowlist
-   /vk:access policy group_chat allowlist
+   /vk:access policy allowlist
    ```
+
+   Group chats are already opt-in by `peer_id`, so they don't need a separate switch.
 
 The community ID and screen name are auto-resolved at startup from `groups.getById` — no configuration step required.
 
@@ -490,12 +492,15 @@ The model is **two-layer**: a chat is either allowed or not, and within each all
 
 ### 11.1 Policies
 
-Set per **peer-type** (DM vs group chat), so a user can keep groups locked down while leaving DMs in pairing mode — or vice versa.
+DMs have a `policies.dm` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`.
 
-| Policy      | Behavior                                                                                                                                                           |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pairing`   | Any incoming message from an unknown chat/sender gets a pairing-code reply. Use to onboard new chats/people. **Default for both peer types.**                      |
-| `allowlist` | Only chats listed in `access.json → chats`, and within each, only senders listed in that chat's `senders` array, are forwarded. Anything else is dropped silently. |
+| Policy (DMs only) | Behavior                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `pairing`         | Unknown DM senders get a pairing-code reply. **Default.** Use to onboard new people.                                                  |
+| `allowlist`       | Only senders listed in their DM chat's `senders` array are forwarded. Anything else is dropped silently (or replied to once per 24h). |
+| `disabled`        | Global kill switch — every inbound message is dropped silently (DMs and group chats, allowlisted or not).                             |
+
+Group chats are off until the operator runs `/vk:access group add <peer_id>` — there is no group pairing flow and no group policy switch.
 
 ### 11.2 `access.json` schema
 
@@ -505,8 +510,7 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
 {
   "version": 1,
   "policies": {
-    "dm": "allowlist",
-    "group_chat": "allowlist"
+    "dm": "allowlist"
   },
   "chats": {
     "123456": {
@@ -522,14 +526,13 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
       "senders": [123456, 234567, 345678],
       "mention_policy": "mention_only",
       "added_at": "2026-05-14T11:02:00Z",
-      "added_by": "pairing"
+      "added_by": "manual"
     }
   },
   "pending_pairs": {
     "x7k4mq": {
-      "peer_id": 2000000099,
-      "from_id": 555444,
-      "kind": "group_chat",
+      "peer_id": 999111,
+      "from_id": 999111,
       "expires_at": "2026-05-14T11:30:00Z"
     }
   }
@@ -545,7 +548,7 @@ Notes:
 
 ### 11.3 Group-chat-specific behavior
 
-- **Bot joins:** Group chats appear in `pending_pairs` only after someone in the chat types `@<community> pair`. Until then the bot is silent — VK delivers the messages, but the gate drops them as `chat-not-allowed`.
+- **Bot joins:** Group chats stay silent on join — VK delivers the messages, but the gate drops them as `chat-not-allowed`. The operator opts each chat in by `peer_id` with `/vk:access group add <peer_id>`. There is no group-chat pairing flow.
 - **Privacy mode:** The bot needs "Read all messages" permission turned **off** in the community settings unless explicitly desired. When off, VK only delivers messages where the bot is mentioned or replied-to — a nice belt-and-braces alongside the mention-policy gate.
 - **Adding senders:** `/vk:access add-sender <peer_id> <user_id_or_screen_name>` resolves screen names via `users.get` and writes the ID.
 - **Removing the bot from a chat:** Generates a `chat_kick_user` event; we mark the chat `inactive` (kept for audit) and stop forwarding.
@@ -554,17 +557,19 @@ Notes:
 
 ## 12. Slash commands
 
-| Command                                                               | Action                                                                                                                   |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `/vk:configure <token>`                                               | Writes `VK_TOKEN` into `~/.claude/channels/vk/.env` and prints the webhook URL + secret to paste into VK.                |
-| `/vk:access pair <code>`                                              | Consumes a pending pairing code. Adds the originating peer to `chats` and the originating user to that chat's `senders`. |
-| `/vk:access policy {dm\|group_chat} {pairing\|allowlist}`             | Sets policy per peer-type.                                                                                               |
-| `/vk:access list [--chats\|--senders <peer_id>]`                      | Lists allowlisted chats with resolved titles, or senders for a specific chat.                                            |
-| `/vk:access add-sender <peer_id> <user_id_or_@screen_name>`           | Adds a sender to a chat's allowlist. Resolves screen names.                                                              |
-| `/vk:access remove-sender <peer_id> <user_id>`                        | Removes a sender from a chat.                                                                                            |
-| `/vk:access remove-chat <peer_id>`                                    | Drops a chat entirely.                                                                                                   |
-| `/vk:access mention-policy <peer_id> {mention_only\|all\|reply_only}` | Group chats only — controls activation, not access.                                                                      |
-| `/vk:status`                                                          | Prints: transport, connection health, community handle, policies, chat count, sender count, last error.                  |
+| Command                                                               | Action                                                                                                        |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `/vk:configure <token>`                                               | Writes `VK_TOKEN` into `~/.claude/channels/vk/.env` and prints the webhook URL + secret to paste into VK.     |
+| `/vk:access pair <code>`                                              | DM only. Consumes a pending pairing code; adds the DM peer to `chats` and the sender to its `senders`.        |
+| `/vk:access group add <peer_id> [--allow ids] [--mention-policy …]`   | Opt a group chat in. Optional `--allow` seeds the sender list; `--mention-policy` defaults to `mention_only`. |
+| `/vk:access group remove <peer_id>`                                   | Drop a group chat. Same effect as `remove-chat`.                                                              |
+| `/vk:access policy {pairing\|allowlist\|disabled}`                    | Set the DM policy. Group chats have no policy (always opt-in by `peer_id`).                                   |
+| `/vk:access list [--chats\|--senders <peer_id>]`                      | Lists allowlisted chats with resolved titles, or senders for a specific chat.                                 |
+| `/vk:access add-sender <peer_id> <user_id_or_@screen_name>`           | Adds a sender to a chat's allowlist. Resolves screen names.                                                   |
+| `/vk:access remove-sender <peer_id> <user_id>`                        | Removes a sender from a chat.                                                                                 |
+| `/vk:access remove-chat <peer_id>`                                    | Drops a chat entirely.                                                                                        |
+| `/vk:access mention-policy <peer_id> {mention_only\|all\|reply_only}` | Group chats only — controls activation, not access.                                                           |
+| `/vk:status`                                                          | Prints: transport, connection health, community handle, policies, chat count, sender count, last error.       |
 
 All commands hit `http://127.0.0.1:6060/admin/*`, so they work even from within skills. The admin API performs validation, atomic write to the relevant JSON file, and signals the inbound router to reload its cached gate.
 

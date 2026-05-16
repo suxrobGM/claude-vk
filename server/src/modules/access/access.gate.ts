@@ -9,11 +9,10 @@ export type GateResult =
   | { kind: "drop"; reason: string };
 
 /**
- * PRD §9.4 gate: chat allowlist → sender allowlist → mention activation
- * (group chats only). An empty `senders[]` means "no per-sender restriction"
- * — anyone in this chat passes the sender layer. Under `allowlist`, DM
- * denials surface as `deny_with_reply` (one reply per sender); group-chat
- * denials stay silent.
+ * Three-layer gate: chat allowlist → sender allowlist → mention activation
+ * (group chats only). Empty `senders[]` means "anyone in this chat". DMs
+ * fall back to `need_pair` or `deny_with_reply` per `policies.dm`; group
+ * chats are opt-in via `/vk:access group add` — unknown groups are dropped.
  */
 @singleton()
 export class AccessGate {
@@ -21,20 +20,24 @@ export class AccessGate {
 
   check(msg: InboundMessage): GateResult {
     const file = this.access.get();
-    const policy = msg.is_group_chat ? file.policies.group_chat : file.policies.dm;
+
+    // `disabled` is a global kill switch — drops every inbound message, DM and group, even allowlisted ones.
+    if (file.policies.dm === "disabled") {
+      return { kind: "drop", reason: "disabled" };
+    }
 
     const chat = file.chats[String(msg.peer_id)];
     if (!chat) {
-      if (policy === "pairing") return { kind: "need_pair" };
-      return msg.is_group_chat
-        ? { kind: "drop", reason: "chat-not-allowed" }
+      if (msg.is_group_chat) return { kind: "drop", reason: "chat-not-allowed" };
+      return file.policies.dm === "pairing"
+        ? { kind: "need_pair" }
         : { kind: "deny_with_reply", reason: "chat-not-allowed" };
     }
 
     if (chat.senders.length > 0 && !chat.senders.includes(msg.from_id)) {
-      if (policy === "pairing") return { kind: "need_pair" };
-      return msg.is_group_chat
-        ? { kind: "drop", reason: "sender-not-allowed" }
+      if (msg.is_group_chat) return { kind: "drop", reason: "sender-not-allowed" };
+      return file.policies.dm === "pairing"
+        ? { kind: "need_pair" }
         : { kind: "deny_with_reply", reason: "sender-not-allowed" };
     }
 
