@@ -61,12 +61,18 @@ Root-level list in `access.json`. Case-insensitive, word-bounded literal match:
 
 Hot-reloads on save. `"claude"` hits `"Hey Claude, do X"` but not `"claudette"`.
 
+**Requires an admin permission for the bot in the chat** — otherwise VK
+drops non-canonical mentions server-side and the plugin never sees them.
+See "Privacy mode" below.
+
 ### Privacy mode
 
 VK community admin → "Bots → Conversation messages":
 
 - **Off** — VK only delivers mentions/replies. Good pairing for `mention_only`.
-- **On** — required for `mentionPolicy=all`. Without it, the long-poll sees nothing else.
+- **On** — required for `mentionPatterns` and `mentionPolicy=all`. The bot
+  must also be **admin in each group chat** — without admin rights VK still
+  filters non-mention messages even with this on.
 
 ## `access.json`
 
