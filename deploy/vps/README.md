@@ -44,6 +44,25 @@ Survive reboots — `crontab -e`:
 @reboot tmux new -d -s tg -c /root/bots/tg 'claude --channels plugin:telegram@claude-plugins-official'
 ```
 
+**Nightly restart** — clears context, reclaims memory:
+
+```bash
+crontab -e
+
+# Restart every night at 4am
+0 4 * * * tmux kill-session -t vk 2>/dev/null; tmux new -d -s vk -c /root/bots/vk 'claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins'
+0 4 * * * tmux kill-session -t tg 2>/dev/null; tmux new -d -s tg -c /root/bots/tg 'claude --channels plugin:telegram@claude-plugins-official'
+```
+
+**Auto-restart on crash** — every 5 min, respawn if missing:
+
+```bash
+*/5 * * * * tmux has-session -t vk 2>/dev/null || tmux new -d -s vk -c /root/bots/vk 'claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins'
+*/5 * * * * tmux has-session -t tg 2>/dev/null || tmux new -d -s tg -c /root/bots/tg 'claude --channels plugin:telegram@claude-plugins-official'
+```
+
+Together with `@reboot`, this covers all three failure modes: boot, crash, context bloat. Use absolute paths — `~` doesn't expand in cron.
+
 ## Customize per bot
 
 - Working dir is **not** a code repo — no git, no package managers, no Read on cwd. Add `Read(./**)`, `Write(./**)` to `allow` if you want the bot to scaffold files.
