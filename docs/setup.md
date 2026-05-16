@@ -45,7 +45,7 @@ In any Claude Code session:
 
 ```text
 /plugin marketplace add https://github.com/suxrobgm/claude-plugins
-/plugin install vk@claude-plugins
+/plugin install vk@sukhrob-claude-plugins
 /reload-plugins
 ```
 
@@ -66,7 +66,7 @@ The plugin reads this file at startup. Shell env always wins on conflict: `VK_TO
 Exit your current session and start a new one:
 
 ```bash
-claude --dangerously-load-development-channels plugin:vk@claude-plugins
+claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins
 ```
 
 The `--dangerously-load-development-channels` flag is required while `claude-vk` isn't on Anthropic's curated allowlist. Combining it with `--channels` does **not** extend the bypass — pick one.
