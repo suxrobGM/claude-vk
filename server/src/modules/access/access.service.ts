@@ -133,13 +133,13 @@ export class AccessService {
 
   /** Read the DM policy. */
   getPolicies(): { dm: DmPolicy } {
-    return { dm: this.store.get().policies.dm };
+    return { dm: this.store.get().policy };
   }
 
   /** Set the DM policy. */
   async setDmPolicy(policy: DmPolicy) {
     await this.store.update((draft) => {
-      draft.policies.dm = policy;
+      draft.policy = policy;
     });
     return { dm: policy };
   }

@@ -492,13 +492,13 @@ The model is **two-layer**: a chat is either allowed or not, and within each all
 
 ### 11.1 Policies
 
-DMs have a `policies.dm` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`.
+DMs have a `policy` setting; group chats have none — they're always opt-in by `peer_id` via `/vk:access group add`. The `disabled` value is a global kill switch and silences both DMs and group chats.
 
-| Policy (DMs only) | Behavior                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `pairing`         | Unknown DM senders get a pairing-code reply. **Default.** Use to onboard new people.                                                  |
-| `allowlist`       | Only senders listed in their DM chat's `senders` array are forwarded. Anything else is dropped silently (or replied to once per 24h). |
-| `disabled`        | Global kill switch — every inbound message is dropped silently (DMs and group chats, allowlisted or not).                             |
+| Policy      | Scope        | Behavior                                                                                                                              |
+| ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `pairing`   | DMs          | Unknown DM senders get a pairing-code reply. **Default.** Use to onboard new people.                                                  |
+| `allowlist` | DMs          | Only senders listed in their DM chat's `senders` array are forwarded. Anything else is dropped silently (or replied to once per 24h). |
+| `disabled`  | DMs + groups | Global kill switch — every inbound message is dropped silently (DMs and group chats, allowlisted or not).                             |
 
 Group chats are off until the operator runs `/vk:access group add <peer_id>` — there is no group pairing flow and no group policy switch.
 
@@ -509,9 +509,7 @@ Stored at `~/.claude/channels/vk/access.json`, mode `0600`. Hand-editable; serve
 ```json
 {
   "version": 1,
-  "policies": {
-    "dm": "allowlist"
-  },
+  "policy": "allowlist",
   "chats": {
     "123456": {
       "kind": "dm",

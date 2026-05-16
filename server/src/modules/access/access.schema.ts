@@ -32,9 +32,7 @@ export const PendingPairSchema = t.Object({
 
 export const AccessFileSchema = t.Object({
   version: t.Literal(1, { default: 1 }),
-  policies: t.Object({
-    dm: DmPolicySchema,
-  }),
+  policy: DmPolicySchema,
   chats: t.Record(t.String(), ChatEntrySchema),
   pending_pairs: t.Record(t.String(), PendingPairSchema),
 });
@@ -48,7 +46,7 @@ export type MentionPolicy = Static<typeof MentionPolicySchema>;
 
 export const ACCESS_FILE_DEFAULTS: AccessFile = {
   version: 1,
-  policies: { dm: "pairing" },
+  policy: "pairing",
   chats: {},
   pending_pairs: {},
 };
