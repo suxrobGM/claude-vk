@@ -16,7 +16,7 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
 > Detailed walkthrough: [docs/setup.md](docs/setup.md).
 
 1. **Create a VK community + access token.** vk.com → Manage → Create community. In **Manage → Messages**, enable "Community messages" and "Bot capabilities" (turn on "Allow adding to chats" if you want group-chat support). In **Manage → Additional Settings → API usage → Access tokens**, mint a token with scopes `messages, photos, docs, manage`. Copy it.
-2. **Enable Bots Long Poll.** **Manage → Additional Settings → API usage → Long Poll API** → enabled, API version `≥ 5.199`, check `message_new`.
+2. **Enable Bots Long Poll.** **Manage → Additional Settings → API usage → Long Poll API** → enabled. Add `messages` to the list of events.
 3. **Install the plugin** from this marketplace:
 
    ```text
@@ -53,7 +53,7 @@ A Claude Code **channel plugin** that bridges [VK.com](https://vk.com) into your
    /vk:access policy allowlist
    ```
 
-   To use the bot in a group chat, opt the chat in by `peer_id` (no pairing flow):
+   To use the bot in a group chat, opt the chat in by `peer_id`:
 
    ```text
    /vk:access group add <peer_id>
