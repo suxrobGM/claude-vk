@@ -56,10 +56,12 @@ Use absolute paths — `~` does not expand in cron.
 tmux ls                  # list sessions
 tmux attach -t vk        # peek — Ctrl+b then d to detach
 tmux kill-session -t vk  # stop (cron respawns within 5 min)
-tail -f ~/bots/vk/bot.log
 ```
+
+No log file — Claude's output lives in the tmux scrollback (`tmux attach`).
 
 ## Notes
 
-- **Don't redirect Claude's output** (`>> log`, `| tee`). It drops Claude into `--print` mode and it exits on launch. The script logs via `tmux pipe-pane` instead.
+- **MCP servers fail with ENOENT?** Cron's PATH is too bare for Claude to find `bun`/`node`. The script adds `~/.local/bin`, `~/.bun/bin`, and nvm's node — fix it if `which claude bun node` differs.
+- **Never redirect Claude's output** (`>> log`, `| tee`) — it flips to `--print` mode and exits on launch. For logs, use `tmux pipe-pane` (and rotate it).
 - **Dev flag prompts on every launch.** `--dangerously-load-development-channels` shows a confirm prompt; the script presses Enter for it. Publish the plugin and use `--channels` to skip this.

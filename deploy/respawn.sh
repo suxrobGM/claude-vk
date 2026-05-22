@@ -1,27 +1,25 @@
 #!/usr/bin/env bash
-# Respawn a Claude Code channel bot in tmux if its session has died.
-# Run from cron. Copy one per bot dir and edit the three vars below.
-#
-# Two non-obvious things this gets right:
-#   - Logs via `tmux pipe-pane`. Redirecting Claude's
-#     stdout makes it think it has no terminal, so it drops into --print mode and
-#     exits immediately. pipe-pane taps the pane without touching Claude's stdio.
-#   - Presses Enter for the --dangerously-load-development-channels confirm prompt
-#     that appears on every launch. Harmless no-op when launching with --channels.
+# Respawn a Claude Code channel bot in tmux if its session died. Run from cron.
+# Copy one per bot dir and edit the three vars below.
 set -u
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin
+
+# Cron's PATH is bare; add the runtimes that launch the MCP servers (bun, node).
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:/usr/bin:/bin"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
 
 session=vk
 workdir=/root/bots/vk
 launch='exec claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins'
 
-# Already running -> nothing to do. On a crash the pane process (Claude) exits,
-# tmux destroys the session, this test fails, and we relaunch below.
+# Alive -> done. On a crash the pane (Claude) exits and tmux drops the session.
 tmux has-session -t "$session" 2>/dev/null && exit 0
 
+# To log, add `tmux pipe-pane`; never redirect Claude's stdout (`>> file`/`| tee`)
+# -- that flips it into --print mode and it exits on launch.
 tmux new -d -s "$session" -c "$workdir" "$launch"
-tmux pipe-pane -t "$session" -o "cat >> $workdir/bot.log"
 
+# Confirm the dev-channels prompt shown on every launch (no-op for --channels).
 for _ in $(seq 1 20); do
   if tmux capture-pane -p -t "$session" 2>/dev/null | grep -q "local development"; then
     tmux send-keys -t "$session" Enter
