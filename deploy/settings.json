@@ -57,6 +57,8 @@
       "Read(~/.bash_history)",
       "Read(~/.zsh_history)",
       "Read(~/.netrc)",
+      "Read(~/.claude.json)",
+      "Read(~/.claude/.credentials.json)",
       "Read(**/.env.*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
@@ -67,21 +69,51 @@
 
       "Write(/**)",
       "Write(~/.ssh/**)",
-      "Write(~/.claude/**)",
       "Write(~/.bashrc)",
       "Write(~/.zshrc)",
       "Write(~/.profile)",
+
+      "Write(~/.claude.json)",
+      "Write(~/.claude/.credentials.json)",
+      "Write(~/.claude/settings.json)",
+      "Write(~/.claude/settings.local.json)",
+      "Write(~/.claude/CLAUDE.md)",
+      "Write(~/.claude/keybindings.json)",
+      "Write(~/.claude/skills/**)",
+      "Write(~/.claude/commands/**)",
+      "Write(~/.claude/agents/**)",
+      "Write(~/.claude/hooks/**)",
+      "Write(~/.claude/plugins/**)",
+      "Write(~/.claude/channels/**)",
+
       "Edit(~/.ssh/**)",
-      "Edit(~/.claude/channels/**/access.json)",
-      "Edit(~/.claude/channels/**/.env)",
       "Edit(~/.bashrc)",
-      "Edit(~/.zshrc)"
+      "Edit(~/.zshrc)",
+      "Edit(~/.profile)",
+
+      "Edit(~/.claude.json)",
+      "Edit(~/.claude/.credentials.json)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude/CLAUDE.md)",
+      "Edit(~/.claude/keybindings.json)",
+      "Edit(~/.claude/skills/**)",
+      "Edit(~/.claude/commands/**)",
+      "Edit(~/.claude/agents/**)",
+      "Edit(~/.claude/hooks/**)",
+      "Edit(~/.claude/plugins/**)",
+      "Edit(~/.claude/channels/**)"
     ],
 
     "allow": [
       "Bash(curl *)",
       "WebFetch(*)",
       "WebSearch",
+
+      "Read(~/.claude/projects/**/memory/**)",
+      "Write(~/.claude/projects/**/memory/**)",
+      "Edit(~/.claude/projects/**/memory/**)",
+
       "mcp__plugin_vk_vk__*",
       "mcp__plugin_telegram_telegram__*",
       "mcp__plugin_context7_context7__*"
