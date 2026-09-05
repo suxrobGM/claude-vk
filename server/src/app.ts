@@ -13,6 +13,19 @@ import { healthController } from "@/modules/health/health.controller";
 import { startInbound } from "@/modules/inbound/inbound.startup";
 import { runtimeController } from "@/modules/runtime/runtime.controller";
 import { UsersCache } from "@/modules/users/users.cache";
+import { runSetup } from "@/setup";
+import { runUninstall } from "@/uninstall";
+
+// The two host commands; they run before any config exists, so they precede validateEnv().
+if (process.argv[2] === "setup") {
+  runSetup(process.argv.slice(3));
+  process.exit(0);
+}
+
+if (process.argv[2] === "uninstall") {
+  runUninstall(process.argv.slice(3));
+  process.exit(0);
+}
 
 validateEnv();
 bootstrapContainer();

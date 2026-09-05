@@ -10,22 +10,30 @@ Run VK / Telegram bots 24/7 in tmux, kept alive by cron.
 
 ## Deploy
 
+From a Claude Code session with the plugin installed, run `/vk:setup` (or the installer
+directly):
+
 ```bash
-mkdir -p ~/bots/vk/.claude ~/bots/tg/.claude
-cp settings.json ~/bots/vk/.claude/ && cp CLAUDE.md respawn.sh ~/bots/vk/
-cp settings.json ~/bots/tg/.claude/ && cp CLAUDE.md respawn.sh ~/bots/tg/
-chmod +x ~/bots/vk/respawn.sh ~/bots/tg/respawn.sh
+bun run ${CLAUDE_PLUGIN_ROOT}/dist/server.js setup            # ~/bots/vk
+bun run ${CLAUDE_PLUGIN_ROOT}/dist/server.js setup ~/bots/vk2 # another directory
 ```
 
-Edit the vars at the top of each `respawn.sh`:
+It writes `respawn.sh`, `CLAUDE.md` and `.claude/settings.json` into the workdir, points the
+installed `respawn.sh` at that directory, creates `~/.claude/channels/vk/.env` from the template
+if it is missing, and installs the cron schedule below. Re-run it after a plugin update: the
+plugin owns those three files and rewrites them, so edit the templates in this directory rather
+than an installed copy. Your `.env` is never touched once it exists.
+
+`/vk:uninstall` (or `... dist/server.js uninstall`) reverses all of it. It keeps
+`~/.claude/channels/vk/` unless you pass `--all`.
+
+For a second bot from another plugin (for example telegram), copy this directory's files by hand
+and edit `session`, `workdir` and `launch` at the top of `respawn.sh`:
 
 ```bash
-# vk
-session=vk; workdir=/root/bots/vk
-launch='exec claude --dangerously-load-development-channels plugin:vk@sukhrob-claude-plugins'
-# tg
-session=tg; workdir=/root/bots/tg
-launch='exec claude --channels plugin:telegram@claude-plugins-official'
+mkdir -p ~/bots/tg/.claude
+cp settings.json ~/bots/tg/.claude/ && cp CLAUDE.md respawn.sh ~/bots/tg/
+chmod +x ~/bots/tg/respawn.sh
 ```
 
 Then start:
@@ -33,7 +41,6 @@ Then start:
 ```bash
 loginctl enable-linger $USER   # non-root only: keep tmux alive after logout
 ~/bots/vk/respawn.sh
-~/bots/tg/respawn.sh
 ```
 
 ## Keep alive — `crontab -e`

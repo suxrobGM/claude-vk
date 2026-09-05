@@ -20,6 +20,9 @@ const ITEMS: Array<[from: string, to: string]> = [
   [".mcp.json", ".mcp.json"],
   ["skills", "skills"],
   ["ACCESS.md", "ACCESS.md"],
+  // setup installs these from the shipped plugin, so they have to travel with it.
+  ["deploy", "deploy"],
+  ["server/.env.example", ".env.example"],
 ];
 
 function fail(message: string): never {
