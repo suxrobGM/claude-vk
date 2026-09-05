@@ -6,9 +6,7 @@ import { logDir } from "@/state/paths";
 const level = process.env.LOG_LEVEL ?? "info";
 const isDev = process.env.NODE_ENV === "development";
 
-// One rotation: vk.log → vk.log.1 (overwriting any previous .1) once the
-// active file crosses MAX_LOG_BYTES. Single-step rotation keeps disk usage
-// bounded at 2× MAX_LOG_BYTES without needing a daemon or a dep.
+// Single-step rotation (vk.log -> vk.log.1) bounds disk use without a daemon or a dep.
 const MAX_LOG_BYTES = 10 * 1024 * 1024;
 
 function rotateIfOversized(file: string): void {
@@ -24,30 +22,30 @@ function rotateIfOversized(file: string): void {
   try {
     unlinkSync(rotated);
   } catch {
-    // no prior rotation — fine
+    // no prior rotation
   }
 
   try {
     renameSync(file, rotated);
   } catch {
-    // rename can fail mid-flight on Windows if a previous run still holds the
-    // handle; fall through and let pino reopen and append.
+    // Windows may still hold the handle from a prior run; pino reopens and appends.
   }
 }
 
-// Logs go to stderr only — stdout is reserved for the MCP framing. Prod also
-// tees to `~/.claude/channels/vk/log/vk.log` since Claude Code swallows stderr.
+// Tees to `~/.claude/channels/vk/log/vk.log` because Claude Code swallows stderr.
 function buildProdLogger() {
   mkdirSync(logDir, { recursive: true });
   const logFile = join(logDir, "vk.log");
   rotateIfOversized(logFile);
-  const fileStream = destination({ dest: logFile, sync: false, mkdir: true });
+  // sync: an async fd is still opening at process.exit, so pino's exit flush throws.
+  const fileStream = destination({ dest: logFile, sync: true, mkdir: true });
   return pino(
     { level, base: { plugin: "vk" } },
     multistream([{ stream: destination(2) }, { stream: fileStream }]),
   );
 }
 
+/** Logs to stderr only; stdout is reserved for MCP framing. */
 export const logger = isDev
   ? pino({
       level,
