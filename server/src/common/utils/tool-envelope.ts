@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { PluginError, VkApiError } from "@/common/errors";
 import { logger } from "@/common/logger";
 import { humanizeError } from "./error-messages";

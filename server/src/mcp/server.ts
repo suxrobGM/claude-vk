@@ -1,12 +1,12 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { logger } from "@/common/logger";
 import { buildCapabilities } from "./capabilities";
 import { registerAllTools } from "./register-tools";
 
 let ready = false;
 
-/** True once the MCP stdio transport has connected. */
+/** True once a client has opened the MCP stdio connection. */
 export function isMcpReady(): boolean {
   return ready;
 }
@@ -45,7 +45,7 @@ Tools:
  * each module resolves its dependencies through the same container when
  * `registerAllTools` runs.
  */
-export async function startMcpServer(): Promise<McpServer> {
+export function startMcpServer(): McpServer {
   const server = new McpServer(
     { name: "vk", version: "1.0.0" },
     { capabilities: buildCapabilities(), instructions: INSTRUCTIONS },
@@ -53,9 +53,18 @@ export async function startMcpServer(): Promise<McpServer> {
 
   registerAllTools(server);
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  ready = true;
-  logger.info("mcp server connected over stdio");
+  // serveStdio picks the protocol era and pins one instance per connection; stdio has
+  // exactly one, so the factory returns the singleton the notifier and relay hold.
+  serveStdio(
+    () => {
+      ready = true;
+      return server;
+    },
+    {
+      onerror: (err) => logger.error({ err }, "mcp stdio error"),
+    },
+  );
+
+  logger.info("mcp server serving over stdio");
   return server;
 }

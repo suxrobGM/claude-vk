@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { container } from "@/common/di";
 import { logger } from "@/common/logger";
 import { CommunityResolver } from "@/modules/access/community-resolver";

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { singleton } from "tsyringe";
 import { logger } from "@/common/logger";
 import { AccessStore } from "@/modules/access/access.store";

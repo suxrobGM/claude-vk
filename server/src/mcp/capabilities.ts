@@ -1,4 +1,4 @@
-import type { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
+import type { ServerCapabilities } from "@modelcontextprotocol/server";
 
 /**
  * Capabilities declared on every connection. The access gate authenticates

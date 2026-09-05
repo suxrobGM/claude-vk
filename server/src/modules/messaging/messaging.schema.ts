@@ -2,13 +2,10 @@ import { z } from "zod";
 import type { ToolFailure } from "@/common/utils/tool-envelope";
 
 /**
- * MCP tool input schemas. The MCP SDK's `registerTool` consumes a
- * `ZodRawShape` — a record of zod schemas keyed by field name — so these are
- * exported as plain objects rather than wrapped `z.object(...)` instances.
- * The SDK validates incoming tool calls against this shape before our handler
- * runs.
+ * MCP tool input schemas. `registerTool` takes a Standard Schema, so these are
+ * `z.object(...)` instances; the SDK validates incoming calls before our handler runs.
  */
-export const SendMessageInputShape = {
+export const SendMessageInputSchema = z.object({
   peer_id: z
     .number()
     .int()
@@ -19,21 +16,21 @@ export const SendMessageInputShape = {
     .int()
     .optional()
     .describe("conversation_message_id to reply to. Applied only to the first chunk."),
-} as const;
+});
 
-export const EditMessageInputShape = {
+export const EditMessageInputSchema = z.object({
   peer_id: z.number().int(),
   conversation_message_id: z.number().int(),
   text: z.string().min(1),
-} as const;
+});
 
-export const DeleteMessageInputShape = {
+export const DeleteMessageInputSchema = z.object({
   peer_id: z.number().int(),
   conversation_message_id: z.number().int(),
   delete_for_all: z.boolean().optional().default(false),
-} as const;
+});
 
-export const ReactInputShape = {
+export const ReactInputSchema = z.object({
   peer_id: z.number().int(),
   conversation_message_id: z.number().int(),
   reaction_id: z
@@ -41,18 +38,18 @@ export const ReactInputShape = {
     .int()
     .min(1)
     .describe("VK reaction id (positive integer from VK's enumerated set)."),
-} as const;
+});
 
-export const MarkReadInputShape = {
+export const MarkReadInputSchema = z.object({
   peer_id: z.number().int(),
   start_message_id: z
     .number()
     .int()
     .optional()
     .describe("Mark as read up to this message_id; omit to mark all unread."),
-} as const;
+});
 
-export const UploadAttachmentInputShape = {
+export const UploadAttachmentInputSchema = z.object({
   peer_id: z.number().int(),
   path: z.string().min(1).describe("Absolute path to a local file (≤ 50 MB)."),
   kind: z
@@ -60,14 +57,14 @@ export const UploadAttachmentInputShape = {
     .optional()
     .default("auto")
     .describe("Override extension-based detection."),
-} as const;
+});
 
-export type SendMessageInput = z.infer<z.ZodObject<typeof SendMessageInputShape>>;
-export type EditMessageInput = z.infer<z.ZodObject<typeof EditMessageInputShape>>;
-export type DeleteMessageInput = z.infer<z.ZodObject<typeof DeleteMessageInputShape>>;
-export type ReactInput = z.infer<z.ZodObject<typeof ReactInputShape>>;
-export type MarkReadInput = z.infer<z.ZodObject<typeof MarkReadInputShape>>;
-export type UploadAttachmentInput = z.infer<z.ZodObject<typeof UploadAttachmentInputShape>>;
+export type SendMessageInput = z.infer<typeof SendMessageInputSchema>;
+export type EditMessageInput = z.infer<typeof EditMessageInputSchema>;
+export type DeleteMessageInput = z.infer<typeof DeleteMessageInputSchema>;
+export type ReactInput = z.infer<typeof ReactInputSchema>;
+export type MarkReadInput = z.infer<typeof MarkReadInputSchema>;
+export type UploadAttachmentInput = z.infer<typeof UploadAttachmentInputSchema>;
 
 export type SendMessageResult = { ok: true; conversation_message_ids: number[] } | ToolFailure;
 export type EditMessageResult = { ok: true } | ToolFailure;

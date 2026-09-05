@@ -1,10 +1,10 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { singleton } from "tsyringe";
 import { runWithEnvelope, toCallResult } from "@/common/utils/tool-envelope";
 import { UsersCache } from "./users.cache";
 import {
-  GetUserInfoInputShape,
   type GetUserInfoInput,
+  GetUserInfoInputSchema,
   type GetUserInfoResult,
   type UserEntry,
 } from "./users.schema";
@@ -22,7 +22,7 @@ export class UsersTools {
           "Resolve VK user IDs to display name, screen name, and photo URL. " +
           "Backed by `peers.json` cache (1h TTL). Unknown ids are silently dropped — " +
           "caller can detect by length diff vs. input.",
-        inputSchema: GetUserInfoInputShape,
+        inputSchema: GetUserInfoInputSchema,
       },
       async (args: GetUserInfoInput) => toCallResult(await this.lookup(args)),
     );

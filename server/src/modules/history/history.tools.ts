@@ -1,11 +1,11 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { singleton } from "tsyringe";
 import { toCallResult } from "@/common/utils/tool-envelope";
 import {
-  GetHistoryInputShape,
-  SearchMessagesInputShape,
   type GetHistoryInput,
+  GetHistoryInputSchema,
   type SearchMessagesInput,
+  SearchMessagesInputSchema,
 } from "./history.schema";
 import { HistoryService } from "./history.service";
 
@@ -22,7 +22,7 @@ export class HistoryTools {
           "Fetch the last N messages of a peer (default 20, max 200). Returns " +
           "normalized items with `vk_ref` per attachment. Set `extended` to also " +
           "resolve participating users into `profiles[]`.",
-        inputSchema: GetHistoryInputShape,
+        inputSchema: GetHistoryInputSchema,
       },
       async (args: GetHistoryInput) =>
         toCallResult(await this.service.getConversationHistory(args)),
@@ -34,7 +34,7 @@ export class HistoryTools {
         description:
           "Full-text search across the bound identity's conversations via VK " +
           "`messages.search`. Optional `peer_id` scopes to one chat.",
-        inputSchema: SearchMessagesInputShape,
+        inputSchema: SearchMessagesInputSchema,
       },
       async (args: SearchMessagesInput) => toCallResult(await this.service.searchMessages(args)),
     );

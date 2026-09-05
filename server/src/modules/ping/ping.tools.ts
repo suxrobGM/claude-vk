@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { singleton } from "tsyringe";
 
 /**
@@ -10,10 +10,7 @@ export class PingTools {
   register(server: McpServer): void {
     server.registerTool(
       "ping",
-      {
-        description: "Smoke-test tool. Returns 'pong'. Verifies channel connectivity.",
-        inputSchema: {},
-      },
+      { description: "Smoke-test tool. Returns 'pong'. Verifies channel connectivity." },
       () => ({
         content: [{ type: "text", text: "pong" }],
       }),

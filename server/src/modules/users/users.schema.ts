@@ -1,4 +1,4 @@
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 import { z } from "zod";
 import type { ToolFailure } from "@/common/utils/tool-envelope";
 
@@ -41,14 +41,14 @@ export const PEERS_FILE_DEFAULTS: PeersFile = {
 
 /* ------ MCP tool ($users.get) schemas ------------------------------------ */
 
-export const GetUserInfoInputShape = {
+export const GetUserInfoInputSchema = z.object({
   user_ids: z
     .array(z.number().int())
     .min(1)
     .max(100)
     .describe("VK user IDs (capped at 100 per VK's `users.get`)."),
-} as const;
+});
 
-export type GetUserInfoInput = z.infer<z.ZodObject<typeof GetUserInfoInputShape>>;
+export type GetUserInfoInput = z.infer<typeof GetUserInfoInputSchema>;
 
 export type GetUserInfoResult = { ok: true; users: UserEntry[] } | ToolFailure;

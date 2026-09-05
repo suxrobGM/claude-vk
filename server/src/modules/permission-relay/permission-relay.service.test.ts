@@ -1,6 +1,6 @@
 import "reflect-metadata";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, test } from "bun:test";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { AccessStore } from "@/modules/access/access.store";
 import type { AccessFile, ChatEntry } from "@/modules/access/schemas/access-file.schema";
 import type { InboundMessage } from "@/modules/inbound/inbound.types";

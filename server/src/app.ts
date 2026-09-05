@@ -23,7 +23,7 @@ await container.resolve(AccessStore).init();
 await container.resolve(UsersCache).init();
 await container.resolve(PairingService).pruneExpired();
 
-const mcp = await startMcpServer();
+const mcp = startMcpServer();
 startInbound(mcp);
 
 const app = new Elysia()
@@ -32,6 +32,6 @@ const app = new Elysia()
   .use(healthController)
   .use(runtimeController)
   .use(accessController)
-  .listen(parseInt(process.env.PORT!));
+  .listen(Number.parseInt(process.env.PORT!, 10));
 
 logger.info(`Plugin server running at http://${app.server?.hostname}:${app.server?.port}`);

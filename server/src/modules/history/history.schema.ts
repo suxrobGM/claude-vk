@@ -2,12 +2,8 @@ import { z } from "zod";
 import type { ToolFailure } from "@/common/utils/tool-envelope";
 import type { GetHistoryResponse, SearchMessagesResponse } from "@/vk/api.types";
 
-/**
- * MCP tool input schemas for the history module. Same `*InputShape` plain-zod
- * convention as messaging — the MCP SDK consumes the raw shape and validates
- * before calling our handler.
- */
-export const GetHistoryInputShape = {
+/** MCP tool input schemas for the history module. Same `*InputSchema` convention as messaging. */
+export const GetHistoryInputSchema = z.object({
   peer_id: z.number().int(),
   count: z.number().int().min(1).max(200).optional().default(20),
   offset: z.number().int().min(0).optional(),
@@ -17,17 +13,17 @@ export const GetHistoryInputShape = {
     .optional()
     .default(false)
     .describe("Resolve participating users into `profiles[]`."),
-} as const;
+});
 
-export const SearchMessagesInputShape = {
+export const SearchMessagesInputSchema = z.object({
   q: z.string().min(1),
   peer_id: z.number().int().optional().describe("Scope search to one peer."),
   count: z.number().int().min(1).max(100).optional().default(20),
   offset: z.number().int().min(0).optional(),
-} as const;
+});
 
-export type GetHistoryInput = z.infer<z.ZodObject<typeof GetHistoryInputShape>>;
-export type SearchMessagesInput = z.infer<z.ZodObject<typeof SearchMessagesInputShape>>;
+export type GetHistoryInput = z.infer<typeof GetHistoryInputSchema>;
+export type SearchMessagesInput = z.infer<typeof SearchMessagesInputSchema>;
 
 export type GetHistoryResult = { ok: true; data: GetHistoryResponse } | ToolFailure;
 export type SearchMessagesResult = { ok: true; data: SearchMessagesResponse } | ToolFailure;

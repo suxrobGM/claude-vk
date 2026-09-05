@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { container } from "@/common/di";
 import { HistoryTools } from "@/modules/history/history.tools";
 import { MessagingTools } from "@/modules/messaging/messaging.tools";
