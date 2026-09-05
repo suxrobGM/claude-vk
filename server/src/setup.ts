@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { channelDir, envPath } from "@/state/paths";
 import {
@@ -25,17 +25,27 @@ function pluginVersion(): string {
   }
 }
 
+/**
+ * Writes a file atomically, via a temp file and a rename.
+ *
+ * `respawn.sh` reinstalls on every spawn, so setup rewrites the very script running it. Bash
+ * reads a script as it executes, and truncating one in place feeds the live shell garbage.
+ */
 function write(path: string, content: string, mode?: number): void {
   mkdirSync(resolve(path, ".."), { recursive: true });
-  writeFileSync(path, content, "utf8");
+
+  const temp = `${path}.tmp`;
+  writeFileSync(temp, content, "utf8");
 
   if (mode !== undefined) {
     try {
-      chmodSync(path, mode);
+      chmodSync(temp, mode);
     } catch {
       // Windows has no POSIX modes; the VPS is where this matters.
     }
   }
+
+  renameSync(temp, path);
 }
 
 /** The plugin owns these files, so an update always wins. */
