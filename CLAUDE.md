@@ -11,9 +11,10 @@ PRD: [docs/prd.md](docs/prd.md) — source of truth.
 - `bun run dev` / `bun run start` — boot (watch / no-watch)
 - `bun run test` — `bun test`; `*.test.ts` colocated
 - `bun run typecheck` — `tsc --noEmit`
+- `bun run check` — `biome check .` (lint + format + import sort); `bun run format` writes
 - Single test: `bun test <path>` or `bun test -t "<pattern>"`
 
-Pre-commit `lint-staged` + `prettier` via husky — don't bypass.
+Pre-commit `lint-staged` + `biome check --write` via husky — don't bypass.
 
 ## Architecture
 
@@ -44,6 +45,7 @@ Pre-commit `lint-staged` + `prettier` via husky — don't bypass.
 - Strict TS + `noUncheckedIndexedAccess`. Assert `!` only when bound is obvious one line up.
 - `export interface` for object shapes; reserve `type` for unions/intersections.
 - `tsyringe` `@injectable()` / `@singleton()`; `bootstrapContainer` is for non-class registrations only.
+- Biome's `useImportType` is **off** under `server/src` — injected classes are runtime values via `emitDecoratorMetadata`, so `import type` on them breaks DI.
 - Logger: `import { logger } from "@/common/logger"` — never via DI.
 - Errors extend `PluginError` with a stable `code`; `VkApiError` derives `vk_api_<n>`.
 - `MessagingService.send` pushes every outbound `cmid` into `RecentSentMessages` so reply-to-bot resolves.
