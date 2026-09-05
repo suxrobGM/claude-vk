@@ -12,19 +12,21 @@
     "release": "bun run build && bun scripts/sync-to-marketplace.ts",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "format": "biome format --write .",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,css,less,scss,json,md}": [
-      "prettier --write"
+    "*.{js,jsx,ts,tsx,css,less,scss,json,jsonc,md}": [
+      "biome check --write --no-errors-on-unmatched"
     ]
   },
   "devDependencies": {
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
-    "@types/bun": "^1.3.14",
+    "@biomejs/biome": "^2.5.12",
+    "@types/bun": "^1.4.1",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.4",
-    "prettier": "^3.8.1",
-    "typescript": "^6.0.3"
+    "lint-staged": "^17.5.0",
+    "typescript": "^7.0.2"
   }
 }
