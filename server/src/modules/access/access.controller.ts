@@ -60,7 +60,7 @@ export const accessController = new Elysia({
     "/chats/:peerId/senders",
     async ({ params, body, set }) => {
       const added = await access.addSender(params.peerId, body);
-      set.headers["Location"] = `/access/chats/${params.peerId}/senders/${added.userId}`;
+      set.headers.Location = `/access/chats/${params.peerId}/senders/${added.userId}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },
@@ -90,7 +90,7 @@ export const accessController = new Elysia({
     "/groups",
     async ({ body, set }) => {
       const added = await access.addGroup(body);
-      set.headers["Location"] = `/access/chats/${added.peerId}`;
+      set.headers.Location = `/access/chats/${added.peerId}`;
       set.status = 201;
       return { ok: true as const, ...added };
     },

@@ -84,9 +84,8 @@ export class MentionDetector {
     }
 
     if (screenName) {
-      SCREEN_NAME_RE.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = SCREEN_NAME_RE.exec(text)) !== null) {
+      // matchAll clones the regex, so the module-level /g lastIndex never leaks between calls.
+      for (const m of text.matchAll(SCREEN_NAME_RE)) {
         if (m[1]!.toLowerCase() === screenName) return true;
       }
     }

@@ -6,8 +6,8 @@ import { peersPath } from "@/state/paths";
 import { VkClient } from "@/vk/client";
 import {
   PEERS_FILE_DEFAULTS,
-  PeersFileSchema,
   type PeersFile,
+  PeersFileSchema,
   type UserEntry,
 } from "./users.schema";
 

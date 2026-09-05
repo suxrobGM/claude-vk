@@ -1,4 +1,4 @@
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 
 export const DmPolicySchema = t.Union([
   t.Literal("pairing"),

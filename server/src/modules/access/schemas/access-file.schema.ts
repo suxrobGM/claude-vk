@@ -1,4 +1,4 @@
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 import { AddedBySchema, DmPolicySchema, MentionPolicySchema } from "./policy.schema";
 
 export const DmEntrySchema = t.Object({

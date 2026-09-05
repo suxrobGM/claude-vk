@@ -54,15 +54,13 @@ export class JsonStore<T> {
    * Apply a structured-cloned draft mutation, validate, and atomically write.
    * Concurrent calls are serialized so writes can never interleave.
    */
-  async update(fn: (draft: T) => T | void): Promise<void> {
+  async update(fn: (draft: T) => void): Promise<void> {
     const next = this.writeChain.then(async () => {
-      const current = this.get();
-      const draft = structuredClone(current) as T;
-      const result = fn(draft);
-      const candidate = (result === undefined ? draft : result) as T;
-      this.assertValid(candidate, "update");
-      await this.atomicWrite(candidate);
-      this.cache = candidate;
+      const draft = structuredClone(this.get()) as T;
+      fn(draft);
+      this.assertValid(draft, "update");
+      await this.atomicWrite(draft);
+      this.cache = draft;
     });
 
     this.writeChain = next.catch(() => undefined);

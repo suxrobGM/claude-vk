@@ -4,7 +4,7 @@ import type { InboundMessage } from "@/modules/inbound/inbound.types";
 import { RecentSentMessages } from "@/modules/messaging/recent-sent";
 import type { VkClient } from "@/vk/client";
 import type { AccessStore } from "./access.store";
-import { CommunityResolver, type CommunityIdentity } from "./community-resolver";
+import { type CommunityIdentity, CommunityResolver } from "./community-resolver";
 import { MentionDetector } from "./mention";
 import type { AccessFile } from "./schemas/access-file.schema";
 

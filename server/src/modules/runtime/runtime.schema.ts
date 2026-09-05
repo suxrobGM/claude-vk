@@ -1,4 +1,4 @@
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 import { NullableString } from "@/types/common.schema";
 
 /** Sanitized snapshot of effective configuration — secrets are redacted. */

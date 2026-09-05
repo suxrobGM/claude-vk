@@ -4,7 +4,7 @@ import { logger } from "@/common/logger";
 import { StatusRegistry } from "@/common/status";
 import { sleep } from "@/common/utils";
 import { InboundService } from "./inbound.service";
-import { vkMessageToInbound, type VkMessage } from "./message-adapter";
+import { type VkMessage, vkMessageToInbound } from "./message-adapter";
 import type { ChannelNotifier } from "./notifier";
 
 const VK_API_VERSION = "5.199";

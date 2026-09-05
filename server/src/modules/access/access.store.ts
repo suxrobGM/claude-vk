@@ -6,8 +6,8 @@ import { JsonStore } from "@/state/json-store";
 import { accessPath } from "@/state/paths";
 import {
   ACCESS_FILE_DEFAULTS,
-  AccessFileSchema,
   type AccessFile,
+  AccessFileSchema,
 } from "./schemas/access-file.schema";
 
 const RELOAD_DEBOUNCE_MS = 100;
@@ -39,7 +39,7 @@ export class AccessStore {
   }
 
   /** Apply a structured-cloned mutation, validate, atomically persist. */
-  update(fn: (draft: AccessFile) => AccessFile | void): Promise<void> {
+  update(fn: (draft: AccessFile) => void): Promise<void> {
     return this.getStore().update(fn);
   }
 
