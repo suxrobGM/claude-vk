@@ -94,6 +94,7 @@ function build(chats: Record<string, ChatEntry> = { "42": dmEntry() }): {
   notifier: FakeNotifier;
   mcp: McpServer;
   sent: SentNotification[];
+  expire: (id: string) => Promise<void>;
 } {
   const messaging = new FakeMessaging();
   const notifier = new FakeNotifier();
@@ -104,7 +105,10 @@ function build(chats: Record<string, ChatEntry> = { "42": dmEntry() }): {
   );
   service.setNotifier(notifier as unknown as ChannelNotifier);
   service.setMcp(mcp);
-  return { service, messaging, notifier, mcp, sent };
+  // Fires a pending auto-deny without waiting out the real 10m TTL.
+  const expire = (id: string): Promise<void> =>
+    (service as unknown as { expire(id: string): Promise<void> }).expire(id);
+  return { service, messaging, notifier, mcp, sent, expire };
 }
 
 describe("PermissionRelayService.handleRequest", () => {
@@ -166,6 +170,34 @@ describe("PermissionRelayService.handleRequest", () => {
     });
     await service.handleRequest({ request_id: "abcde", tool_name: "X" });
     expect(messaging.sent[0]!.input.peer_id).toBe(77);
+  });
+});
+
+describe("PermissionRelayService timeout", () => {
+  test("an unanswered prompt auto-denies so the session unblocks", async () => {
+    const { service, messaging, notifier, sent, expire } = build();
+    await service.handleRequest({ request_id: "abcde", tool_name: "Read" });
+    await expire("abcde");
+
+    expect(sent).toEqual([
+      {
+        method: "notifications/claude/channel/permission",
+        params: { request_id: "abcde", behavior: "deny" },
+      },
+    ]);
+    expect(notifier.warnings.some((w) => w.includes("auto-denied"))).toBe(true);
+    expect(messaging.sent).toHaveLength(2);
+    expect(messaging.sent[1]!.input.text).toContain("auto-denied");
+  });
+
+  test("a resolved prompt no longer auto-denies", async () => {
+    const { service, sent, expire } = build();
+    await service.handleRequest({ request_id: "abcde", tool_name: "Read" });
+    await service.tryResolveVerdict(dm({ payload: verdictPayload("abcde", "allow") }));
+    await expire("abcde");
+
+    expect(sent).toHaveLength(1);
+    expect((sent[0]!.params as { behavior: string }).behavior).toBe("allow");
   });
 });
 

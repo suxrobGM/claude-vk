@@ -59,6 +59,8 @@
       "Read(~/.netrc)",
       "Read(~/.claude.json)",
       "Read(~/.claude/.credentials.json)",
+      "Read(~/.claude/channels/*/.env)",
+      "Read(**/.env)",
       "Read(**/.env.*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
@@ -113,6 +115,8 @@
       "Read(~/.claude/projects/**/memory/**)",
       "Write(~/.claude/projects/**/memory/**)",
       "Edit(~/.claude/projects/**/memory/**)",
+
+      "Read(~/.claude/channels/*/inbox/**)",
 
       "mcp__plugin_vk_vk__*",
       "mcp__plugin_telegram_telegram__*",

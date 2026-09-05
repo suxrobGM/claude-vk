@@ -9,14 +9,14 @@ import { buildVerdictKeyboard } from "./keyboard";
 import type { PermissionRequestParams } from "./permission-relay.schema";
 import { parsePayloadVerdict } from "./verdict";
 
-const PENDING_TTL_MS = 10 * 60 * 1000;
+const PENDING_TTL_MIN = 10;
+const PENDING_TTL_MS = PENDING_TTL_MIN * 60_000;
 
 interface PendingRequest {
-  request_id: string;
   from_id: number;
   peer_id: number;
   tool_name: string;
-  created_at: number;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 interface DmActivator {
@@ -54,8 +54,6 @@ export class PermissionRelayService {
    * falls back to the terminal prompt.
    */
   async handleRequest(params: PermissionRequestParams): Promise<void> {
-    this.sweepExpired();
-
     const activator = this.findFirstDmActivator();
     if (!activator) {
       logger.warn(
@@ -82,15 +80,24 @@ export class PermissionRelayService {
       return;
     }
 
-    this.pending.set(params.request_id, {
-      request_id: params.request_id,
+    // A re-issued request_id must not leave the previous timer armed.
+    this.forget(params.request_id);
+
+    const requestId = params.request_id;
+    const timer = setTimeout(() => {
+      void this.expire(requestId);
+    }, PENDING_TTL_MS);
+    // Unref'd so an outstanding prompt never keeps `bun test` (or a shutdown) alive.
+    timer.unref();
+
+    this.pending.set(requestId, {
       from_id: activator.from_id,
       peer_id: activator.peer_id,
       tool_name: params.tool_name,
-      created_at: Date.now(),
+      timer,
     });
     logger.info(
-      { peer_id: activator.peer_id, request_id: params.request_id },
+      { peer_id: activator.peer_id, request_id: requestId },
       "permission relay: prompt DM sent",
     );
   }
@@ -114,7 +121,7 @@ export class PermissionRelayService {
       return true;
     }
 
-    const pending = this.pending.get(verdict.request_id);
+    const pending = this.forget(verdict.request_id);
     if (!pending) {
       // Unknown/expired request — still consume the click.
       return true;
@@ -124,34 +131,67 @@ export class PermissionRelayService {
       await this.notifier?.warn(
         `permission verdict for ${verdict.request_id} from non-originating user ignored`,
       );
-      this.pending.delete(verdict.request_id);
       return true;
     }
 
+    await this.emitVerdict(verdict.request_id, verdict.behavior);
+    return true;
+  }
+
+  /** Auto-deny an unanswered prompt so a lapsed request can't leave the session waiting. */
+  private async expire(requestId: string): Promise<void> {
+    const pending = this.forget(requestId);
+    if (!pending) return;
+
+    logger.warn(
+      { request_id: requestId, tool_name: pending.tool_name },
+      "permission relay: prompt unanswered; auto-denying to unblock the session",
+    );
+    await this.emitVerdict(requestId, "deny");
+    await this.notifier?.warn(
+      `permission prompt ${requestId} (${pending.tool_name}) went unanswered for ${String(PENDING_TTL_MIN)}m and was auto-denied`,
+    );
+    const result = await this.messaging.send({
+      peer_id: pending.peer_id,
+      text: `⌛ No answer for ${pending.tool_name} — auto-denied so the bot can keep going.`,
+    });
+    if (!result.ok) {
+      logger.warn(
+        { peer_id: pending.peer_id, request_id: requestId, code: result.code },
+        "permission relay: failed to DM timeout notice",
+      );
+    }
+  }
+
+  /** Emit the verdict notification for `requestId`. */
+  private async emitVerdict(requestId: string, behavior: "allow" | "deny"): Promise<void> {
     const mcp = this.mcp;
     if (!mcp) {
       logger.error(
-        { request_id: verdict.request_id },
+        { request_id: requestId },
         "permission relay: mcp handle missing; cannot emit verdict",
       );
-      return true;
+      return;
     }
 
     try {
       await mcp.server.notification({
         method: "notifications/claude/channel/permission",
-        params: { request_id: verdict.request_id, behavior: verdict.behavior },
+        params: { request_id: requestId, behavior },
       });
-      logger.info(
-        { request_id: verdict.request_id, behavior: verdict.behavior },
-        "permission verdict relayed to Claude",
-      );
+      logger.info({ request_id: requestId, behavior }, "permission verdict relayed to Claude");
     } catch (err) {
-      logger.error({ err, request_id: verdict.request_id }, "failed to emit permission verdict");
-    } finally {
-      this.pending.delete(verdict.request_id);
+      logger.error({ err, request_id: requestId }, "failed to emit permission verdict");
     }
-    return true;
+  }
+
+  /** Drop a pending request, cancel its auto-deny timer, and return what was removed. */
+  private forget(requestId: string): PendingRequest | null {
+    const pending = this.pending.get(requestId);
+    if (!pending) return null;
+    clearTimeout(pending.timer);
+    this.pending.delete(requestId);
+    return pending;
   }
 
   /**
@@ -173,15 +213,6 @@ export class PermissionRelayService {
       return { peer_id: peerId, from_id: peerId };
     }
     return null;
-  }
-
-  private sweepExpired(): void {
-    const cutoff = Date.now() - PENDING_TTL_MS;
-    for (const [id, p] of this.pending) {
-      if (p.created_at < cutoff) {
-        this.pending.delete(id);
-      }
-    }
   }
 }
 
