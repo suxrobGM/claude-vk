@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Value } from "@sinclair/typebox/value";
 import { parse } from "dotenv";
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 import { envPath } from "@/state/paths";
 
 const EnvSchema = t.Object({
@@ -17,9 +17,11 @@ const EnvSchema = t.Object({
 export type Env = Static<typeof EnvSchema>;
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
-    interface ProcessEnv extends Env {}
+    // A member narrows `Bun.Env`'s wider `NODE_ENV?: string`; a second base type would collide.
+    interface ProcessEnv extends Omit<Env, "NODE_ENV"> {
+      NODE_ENV?: Env["NODE_ENV"];
+    }
   }
 }
 
