@@ -1,0 +1,17 @@
+# Biome formats with LF; keep the working tree LF regardless of core.autocrlf.
+* text=auto eol=lf
+
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.exe binary
+*.dll binary
+*.zip binary
+*.pdf binary
